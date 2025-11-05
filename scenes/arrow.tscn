@@ -1,0 +1,25 @@
+[gd_scene load_steps=3 format=3 uid="uid://do3emqkh4ibk7"]
+
+[ext_resource type="Script" uid="uid://cdbvb8b36fgoe" path="res://scripts/arrow.gd" id="1_umosx"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wyax8"]
+size = Vector2(200, 40)
+
+[node name="Arrow" type="Node2D"]
+script = ExtResource("1_umosx")
+
+[node name="ArrowLine" type="Line2D" parent="."]
+width = 6.0
+default_color = Color(1, 0.54901963, 0.23529412, 1)
+joint_mode = 2
+begin_cap_mode = 2
+end_cap_mode = 2
+
+[node name="ArrowHead" type="Polygon2D" parent="."]
+color = Color(1, 0.54901963, 0.23529412, 1)
+polygon = PackedVector2Array(0, -8, 12, 0, 0, 8)
+
+[node name="HoverArea" type="Area2D" parent="."]
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HoverArea"]
+shape = SubResource("RectangleShape2D_wyax8")

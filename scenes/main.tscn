@@ -1,0 +1,160 @@
+[gd_scene load_steps=6 format=3 uid="uid://s3bf3lblnxxy"]
+
+[ext_resource type="Script" uid="uid://dm1ygihgiexpr" path="res://scripts/game_manager.gd" id="1_o5qli"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sgp6g"]
+bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o5qli"]
+bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2901961, 0.61960787, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0wfyh"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sugp2"]
+bg_color = Color(0.15686275, 0.15686275, 0.19607843, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.78431374, 0.78431374, 0.8235294, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_o5qli")
+
+[node name="UIRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PastPanel" type="Panel" parent="UIRoot"]
+layout_mode = 0
+offset_left = 15.0
+offset_top = 90.0
+offset_right = 615.0
+offset_bottom = 840.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_sgp6g")
+
+[node name="PastLabel" type="Label" parent="UIRoot/PastPanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 600.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 27
+text = "⟲ PAST"
+horizontal_alignment = 1
+
+[node name="PresentPanel" type="Panel" parent="UIRoot"]
+layout_mode = 0
+offset_left = 645.0
+offset_top = 90.0
+offset_right = 1245.0
+offset_bottom = 840.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_o5qli")
+
+[node name="PresentLabel" type="Label" parent="UIRoot/PresentPanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 600.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 27
+text = "◉ PRESENT"
+horizontal_alignment = 1
+
+[node name="FuturePanel" type="Panel" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1275.0
+offset_top = 90.0
+offset_right = 1875.0
+offset_bottom = 840.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
+
+[node name="FutureLabel" type="Label" parent="UIRoot/FuturePanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 600.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 27
+text = "⟳ FUTURE"
+horizontal_alignment = 1
+
+[node name="PlayButton" type="Button" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1560.0
+offset_top = 960.0
+offset_right = 1890.0
+offset_bottom = 1050.0
+theme_override_colors/font_color = Color(0.875, 0.875, 0.875, 1)
+theme_override_font_sizes/font_size = 36
+text = "▶ PLAY"
+
+[node name="WaveCounter" type="PanelContainer" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1635.0
+offset_top = 30.0
+offset_right = 1890.0
+offset_bottom = 120.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_sugp2")
+
+[node name="WaveLabel" type="Label" parent="UIRoot/WaveCounter"]
+custom_minimum_size = Vector2(255, 90)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8627451, 0.9411765, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "Wave 1/10"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DamageDisplay" type="HBoxContainer" parent="UIRoot"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 960.0
+offset_right = 210.0
+offset_bottom = 1050.0
+theme_override_constants/separation = 10
+
+[node name="SwordIcon" type="ColorRect" parent="UIRoot/DamageDisplay"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+color = Color(1, 0.54901963, 0.23529412, 1)
+
+[node name="DamageLabel" type="Label" parent="UIRoot/DamageDisplay"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 42
+text = "15"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CardContainer" type="HBoxContainer" parent="UIRoot"]
+layout_mode = 0
+offset_left = 450.0
+offset_top = 945.0
+offset_right = 1470.0
+offset_bottom = 1065.0
+theme_override_constants/separation = 22
+alignment = 1

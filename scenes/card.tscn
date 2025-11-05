@@ -1,0 +1,44 @@
+[gd_scene load_steps=3 format=3 uid="uid://crh4dgr7smgxo"]
+
+[ext_resource type="Script" uid="uid://cpq5r4d2lrm3c" path="res://scripts/card.gd" id="1_d81rb"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_up0cc"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="Card" type="PanelContainer"]
+custom_minimum_size = Vector2(225, 105)
+offset_right = 40.0
+offset_bottom = 40.0
+mouse_default_cursor_shape = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_up0cc")
+script = ExtResource("1_d81rb")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="CardName" type="Label" parent="Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0.83137256, 1, 1)
+theme_override_font_sizes/font_size = 19
+text = "Card Name"
+horizontal_alignment = 1
+
+[node name="Description" type="Label" parent="Content"]
+custom_minimum_size = Vector2(210, 0)
+layout_mode = 2
+theme_override_font_sizes/font_size = 13
+text = "Card description text"
+horizontal_alignment = 1
+autowrap_mode = 2
+
+[connection signal="mouse_entered" from="." to="." method="_on_mouse_entered"]
+[connection signal="mouse_exited" from="." to="." method="_on_mouse_exited"]

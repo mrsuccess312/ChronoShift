@@ -1,0 +1,50 @@
+[gd_scene load_steps=5 format=3 uid="uid://cm5tpmbvinyil"]
+
+[ext_resource type="Script" uid="uid://bpdrk23ljnimx" path="res://scripts/entity.gd" id="1_iiwub"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_og8qq"]
+bg_color = Color(0.15686275, 0.15686275, 0.19607843, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.39215687, 0.39215687, 0.43137255, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_iiwub"]
+bg_color = Color(0.23529412, 0.078431375, 0.078431375, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gr72c"]
+bg_color = Color(0.2901961, 0.87058824, 0.5019608, 1)
+
+[node name="Entity" type="PanelContainer"]
+custom_minimum_size = Vector2(180, 80)
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_og8qq")
+script = ExtResource("1_iiwub")
+
+[node name="Content" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = "Entity name"
+horizontal_alignment = 1
+
+[node name="HPBar" type="ProgressBar" parent="Content"]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+theme_override_styles/background = SubResource("StyleBoxFlat_iiwub")
+theme_override_styles/fill = SubResource("StyleBoxFlat_gr72c")
+show_percentage = false
+
+[node name="StatsLabel" type="Label" parent="Content"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 11
+text = "HP: 100/100 | DMG: 15"
+horizontal_alignment = 1
