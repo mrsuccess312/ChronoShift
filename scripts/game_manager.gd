@@ -118,7 +118,7 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		
 		# Semicircle parameters
 		var arc_center_x = center_x
-		var arc_center_y = 220
+		var arc_center_y = 250
 		var arc_radius = 120
 		var arc_span = PI * 0.6
 		
@@ -207,11 +207,14 @@ func create_player_attack_arrow(panel, entity_array: Array, arrow_array: Array):
 		var arrow = ARROW_SCENE.instantiate()
 		panel.add_child(arrow)
 		
-		# Setup arrow from player to enemy (curve upward)
-		arrow.setup(player_entity.global_position, target_enemy.global_position, -30.0)
+		# Calculate smart curve based on position and distance
+		var curve_amount = calculate_smart_curve(player_entity.position, target_enemy.position)
+		
+		# Setup arrow with LOCAL positions and smart curve
+		arrow.setup(player_entity.position, target_enemy.position, curve_amount)
 		
 		arrow_array.append(arrow)
-		print("Created player attack arrow in Present")
+		print("Created player attack arrow with dynamic curve: ", curve_amount)
 
 func create_enemy_attack_arrows(panel, entity_array: Array, arrow_array: Array):
 	"""Create arrows from each enemy to player in Future"""
@@ -231,12 +234,45 @@ func create_enemy_attack_arrows(panel, entity_array: Array, arrow_array: Array):
 			var arrow = ARROW_SCENE.instantiate()
 			panel.add_child(arrow)
 			
-			# Setup arrow from enemy to player (curve downward)
-			arrow.setup(entity.global_position, player_entity.global_position, 30.0)
+			# Calculate smart curve based on position and distance
+			var curve_amount = calculate_smart_curve(entity.position, player_entity.position)
+			
+			# Setup arrow with LOCAL positions and smart curve
+			arrow.setup(entity.position, player_entity.position, curve_amount)
 			
 			arrow_array.append(arrow)
 	
-	print("Created ", arrow_array.size(), " enemy attack arrows in Future")
+	print("Created ", arrow_array.size(), " enemy attack arrows with dynamic curves")
+
+func calculate_smart_curve(from: Vector2, to: Vector2) -> float:
+	"""
+	Calculate arrow curve amount based on spatial relationship
+	Returns a curve value that makes visual sense
+	"""
+	# Get direction vector
+	var direction = to - from
+	var horizontal_distance = abs(direction.x)
+	var vertical_distance = abs(direction.y)
+	
+	# Calculate angle in radians
+	var angle = direction.angle()
+	
+	# Base curve strength (scales with distance)
+	var base_curve = 30.0
+	
+	# Adjust curve based on how horizontal vs vertical the connection is
+	var horizontal_factor = horizontal_distance / max(direction.length(), 1.0)
+	
+	# More horizontal = more curve, more vertical = less curve
+	var curve_strength = base_curve * (0.5 + horizontal_factor * 0.5)
+	
+	# Determine curve direction based on horizontal position
+	if direction.x < 0:
+		# Target is to the LEFT → curve LEFT (negative)
+		return -curve_strength
+	else:
+		# Target is to the RIGHT → curve RIGHT (positive)
+		return curve_strength
 
 func calculate_future():
 	# Copy present state to future

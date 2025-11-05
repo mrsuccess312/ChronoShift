@@ -2,7 +2,7 @@ extends Node2D
 
 # References
 @onready var arrow_line = $ArrowLine
-@onready var arrowhead = $Arrowhead
+@onready var arrowhead = $ArrowHead
 @onready var hover_area = $HoverArea
 
 # Arrow properties
@@ -15,10 +15,18 @@ var is_hovered = false
 var default_alpha = 0.3  # Faded by default
 var hover_alpha = 1.0    # Fully visible on hover
 
+# Entity offset distance (how far from entity center to start/end arrow)
+var entity_offset = 100.0  # Entities are 72x72, so 36 radius + 9 pixels gap
+
 func setup(from: Vector2, to: Vector2, curve: float = 50.0):
 	"""Initialize arrow from start to end position"""
-	start_pos = from
-	end_pos = to
+	# Calculate direction from start to end
+	var direction = (to - from).normalized()
+	
+	# Offset start and end positions to be near entities, not at center
+	start_pos = from + direction * entity_offset
+	end_pos = to - direction * entity_offset
+	
 	curve_height = curve
 	
 	# Draw the arrow

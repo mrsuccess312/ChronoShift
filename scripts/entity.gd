@@ -9,7 +9,6 @@ var timeline_type = "present"
 @onready var sprite = $Sprite
 @onready var hp_label = $HPLabel
 @onready var damage_label = $DamageLabel
-@onready var hitbox = $Hitbox
 
 # Mouse hover state tracking
 var is_mouse_over = false
