@@ -391,35 +391,192 @@ func _on_play_button_pressed():
 	execute_turn()
 
 func execute_turn():
-	# Reset card system for new turn
+	"""Execute the turn with animations and real-time damage"""
+	# Disable Play button during animations
+	play_button.disabled = true
+	
+	# STEP 1: Shift Present to Past BEFORE animations
+	past_state = present_state.duplicate(true)
+	update_past_timeline()  # Show what happened last turn
+	
+	# STEP 2: Animate player attack (damage happens during animation)
+	await animate_player_attack()
+	
+	# STEP 3: Animate enemy attacks (damage happens during animation)
+	await animate_enemy_attacks()
+	
+	# STEP 4: Reset card system for new turn
 	card_played_this_turn = false
 	for card_node in card_nodes:
 		card_node.reset()
 	
-	# Shift: Present becomes Past
-	past_state = present_state.duplicate(true)
-	
-	# Execute combat (Present becomes what Future predicted)
-	present_state = future_state.duplicate(true)
-	
-	# Check win/loss
+	# STEP 5: Check win/loss conditions
 	if present_state["player"]["hp"] <= 0:
 		print("GAME OVER - You died!")
 		game_over = true
-		play_button.disabled = true      # DISABLE PLAY BUTTON
+		play_button.disabled = true
+		# Update all timelines to show final state
+		calculate_future()
 		update_all_timelines()
-		disable_all_cards()                # DISABLE ALL CARDS
+		disable_all_cards()
 		return
 	
 	if present_state["enemies"].size() == 0:
 		print("Wave ", current_wave, " complete!")
 		advance_wave()
+		play_button.disabled = false  # Re-enable for new wave
 		return
 	
-	# Calculate new future
+	# STEP 6: Calculate new future and update displays
 	calculate_future()
 	update_all_timelines()
 	turn_number += 1
+	
+	# Re-enable Play button for next turn
+	play_button.disabled = false
+	
+	print("Turn ", turn_number, " complete!")
+
+func update_past_timeline():
+	"""Update only the Past timeline visuals"""
+	if not past_state.is_empty():
+		create_entity_visuals("past", past_state, past_entities)
+
+func animate_player_attack() -> void:
+	"""Animate player dashing to enemy and back with damage on impact"""
+	# Find player entity in Present timeline
+	var player_entity = null
+	var target_enemy = null
+	
+	for entity in present_entities:
+		if entity.is_player:
+			player_entity = entity
+		elif target_enemy == null:
+			target_enemy = entity
+	
+	# Safety check
+	if not player_entity or not target_enemy:
+		print("Cannot animate - missing player or enemy")
+		return
+	
+	# Store original position
+	var original_pos = player_entity.position
+	var target_pos = target_enemy.position
+	
+	# Calculate position near enemy (not exactly at center)
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0  # Stop 50 pixels before enemy
+	
+	print("Player attack animation starting...")
+	
+	# Create tween for smooth animation
+	var tween = create_tween()
+	
+	# Phase 1: Dash to enemy (0.3 seconds)
+	tween.tween_property(player_entity, "position", attack_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	# Wait for dash to complete
+	await tween.finished
+	
+	# APPLY DAMAGE AT IMPACT MOMENT
+	if present_state["enemies"].size() > 0:
+		var target_enemy_data = present_state["enemies"][0]
+		target_enemy_data["hp"] -= present_state["player"]["damage"]
+		print("Player dealt ", present_state["player"]["damage"], " damage! Enemy HP: ", target_enemy_data["hp"])
+		
+		# Update visual immediately
+		target_enemy.entity_data = target_enemy_data
+		target_enemy.update_display()
+		
+		# Remove enemy if dead
+		if target_enemy_data["hp"] <= 0:
+			print(target_enemy_data["name"], " defeated!")
+			present_state["enemies"].remove_at(0)
+			target_enemy.queue_free()
+			present_entities.erase(target_enemy)
+	
+	# Phase 2: Brief pause at enemy (0.1 seconds)
+	await get_tree().create_timer(0.1).timeout
+	
+	# Phase 3: Dash back to original position (0.25 seconds)
+	var tween2 = create_tween()
+	tween2.tween_property(player_entity, "position", original_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+	
+	print("Player attack animation complete!")
+
+func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dictionary) -> void:
+	"""Animate a single enemy dashing to player and back with damage on impact"""
+	# Store original position
+	var original_pos = enemy.position
+	var target_pos = player.position
+	
+	# Calculate position near player (not exactly at center)
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0  # Stop 50 pixels before player
+	
+	# Create tween for smooth animation
+	var tween = create_tween()
+	
+	# Phase 1: Dash to player (0.25 seconds)
+	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	# Wait for dash to complete
+	await tween.finished
+	
+	# APPLY DAMAGE AT IMPACT MOMENT
+	var damage = enemy_data["damage"]
+	present_state["player"]["hp"] -= damage
+	print(enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_state["player"]["hp"])
+	
+	# Update player visual immediately
+	player.entity_data = present_state["player"]
+	player.update_display()
+	
+	# Phase 2: Brief pause at player (0.08 seconds)
+	await get_tree().create_timer(0.08).timeout
+	
+	# Phase 3: Dash back to original position (0.2 seconds)
+	var tween2 = create_tween()
+	tween2.tween_property(enemy, "position", original_pos, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+
+func animate_enemy_attacks() -> void:
+	"""Animate all enemies attacking the player sequentially"""
+	# Find player entity in Present timeline
+	var player_entity = null
+	for entity in present_entities:
+		if entity.is_player:
+			player_entity = entity
+			break
+	
+	# Safety check
+	if not player_entity:
+		print("Cannot animate - missing player")
+		return
+	
+	# Get all enemy entities WITH their data
+	var enemy_list = []
+	for i in range(present_state["enemies"].size()):
+		var enemy_data = present_state["enemies"][i]
+		# Find corresponding entity node
+		for entity in present_entities:
+			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
+				enemy_list.append({"node": entity, "data": enemy_data})
+				break
+	
+	# If no enemies, skip animation
+	if enemy_list.size() == 0:
+		print("No enemies to animate")
+		return
+	
+	print("Enemy attack animations starting...")
+	
+	# Animate each enemy attacking sequentially
+	for enemy_info in enemy_list:
+		await animate_single_enemy_attack(enemy_info["node"], player_entity, enemy_info["data"])
+	
+	print("All enemy attack animations complete!")
 
 func advance_wave():
 	current_wave += 1
