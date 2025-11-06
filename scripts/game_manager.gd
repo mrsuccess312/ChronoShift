@@ -28,6 +28,10 @@ var card_nodes = []        # Visual card nodes
 var present_arrows = []
 var future_arrows = []
 
+# Screen shake variables
+var shake_strength = 0.0
+var shake_decay = 5.0
+
 # References to UI elements (we'll connect these soon)
 # References to UI elements
 @onready var past_panel = $UIRoot/PastPanel
@@ -37,6 +41,7 @@ var future_arrows = []
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
 @onready var card_container = $UIRoot/CardContainer
+@onready var camera = $Camera2D
 
 func _ready():
 	print("ChronoShift - Game Manager Ready!")
@@ -484,6 +489,9 @@ func animate_player_attack() -> void:
 		target_enemy_data["hp"] -= present_state["player"]["damage"]
 		print("Player dealt ", present_state["player"]["damage"], " damage! Enemy HP: ", target_enemy_data["hp"])
 		
+		player_entity.play_attack_sound()
+		apply_screen_shake(present_state["player"]["damage"] * 0.5)
+
 		# Update visual immediately
 		target_enemy.entity_data = target_enemy_data
 		target_enemy.update_display()
@@ -527,6 +535,10 @@ func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dict
 	# APPLY DAMAGE AT IMPACT MOMENT
 	var damage = enemy_data["damage"]
 	present_state["player"]["hp"] -= damage
+
+	enemy.play_attack_sound()
+	apply_screen_shake(damage * 0.5)
+	
 	print(enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_state["player"]["hp"])
 	
 	# Update player visual immediately
@@ -649,3 +661,19 @@ func disable_all_cards():
 			card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	
 	print("All cards disabled")
+
+func _process(delta):
+	"""Handle screen shake decay"""
+	if shake_strength > 0:
+		camera.offset = Vector2(
+			randf_range(-shake_strength, shake_strength),
+			randf_range(-shake_strength, shake_strength)
+		)
+		shake_strength = lerp(shake_strength, 0.0, shake_decay * delta)
+		if shake_strength < 0.1:
+			shake_strength = 0.0
+			camera.offset = Vector2.ZERO
+
+func apply_screen_shake(strength: float = 10.0):
+	"""Trigger screen shake effect"""
+	shake_strength = strength

@@ -9,6 +9,7 @@ var timeline_type = "present"
 @onready var sprite = $Sprite
 @onready var hp_label = $HPLabel
 @onready var damage_label = $DamageLabel
+@onready var attack_sound = $AttackSound
 
 # Mouse hover state tracking
 var is_mouse_over = false
@@ -85,3 +86,11 @@ func update_display():
 		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0), 0.5)
 	else:
 		sprite.modulate = Color(1.0, 1.0, 1.0)
+
+func play_attack_sound():
+	"""Play this entity's attack sound"""
+	if attack_sound and attack_sound.stream:
+		attack_sound.play()
+		print(entity_data.get("name", "Entity"), " playing attack sound")
+	else:
+		print(entity_data.get("name", "Entity"), " has no attack sound assigned")

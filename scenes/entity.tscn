@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://dm8rkbfsplgmj"]
+[gd_scene load_steps=3 format=3 uid="uid://dm8rkbfsplgmj"]
 
 [ext_resource type="Script" uid="uid://bpdrk23ljnimx" path="res://scripts/entity.gd" id="1_7rtaj"]
+[ext_resource type="AudioStream" uid="uid://c0jdsyj6awkkt" path="res://sound effects/entity-attack.wav" id="2_gr72c"]
 
 [node name="Entity" type="Node2D"]
 script = ExtResource("1_7rtaj")
@@ -37,3 +38,6 @@ theme_override_constants/outline_size = 2
 theme_override_font_sizes/font_size = 14
 text = "DMG: 15"
 vertical_alignment = 1
+
+[node name="AttackSound" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("2_gr72c")
