@@ -402,15 +402,18 @@ func execute_turn():
 	
 	# STEP 1: Shift Present to Past BEFORE animations
 	past_state = present_state.duplicate(true)
-	update_past_timeline()  # Show what happened last turn
+	update_past_timeline()
 	
-	# STEP 2: Animate player attack (damage happens during animation)
+	# STEP 2: Animate player attack
 	await animate_player_attack()
 	
-	# STEP 3: Animate enemy attacks (damage happens during animation)
+	# STEP 3: Animate enemy attacks
 	await animate_enemy_attacks()
 	
-	# STEP 4: Reset card system for new turn
+	# CRITICAL FIX: Wait for all animations to fully complete
+	await get_tree().create_timer(0.3).timeout
+	
+	# STEP 4: Reset card system
 	card_played_this_turn = false
 	for card_node in card_nodes:
 		card_node.reset()
@@ -420,7 +423,6 @@ func execute_turn():
 		print("GAME OVER - You died!")
 		game_over = true
 		play_button.disabled = true
-		# Update all timelines to show final state
 		calculate_future()
 		update_all_timelines()
 		disable_all_cards()
@@ -429,7 +431,7 @@ func execute_turn():
 	if present_state["enemies"].size() == 0:
 		print("Wave ", current_wave, " complete!")
 		advance_wave()
-		play_button.disabled = false  # Re-enable for new wave
+		play_button.disabled = false
 		return
 	
 	# STEP 6: Calculate new future and update displays
@@ -437,7 +439,7 @@ func execute_turn():
 	update_all_timelines()
 	turn_number += 1
 	
-	# Re-enable Play button for next turn
+	# Re-enable Play button
 	play_button.disabled = false
 	
 	print("Turn ", turn_number, " complete!")
@@ -470,7 +472,7 @@ func animate_player_attack() -> void:
 	
 	# Calculate position near enemy (not exactly at center)
 	var direction = (target_pos - original_pos).normalized()
-	var attack_pos = target_pos - direction * 50.0  # Stop 50 pixels before enemy
+	var attack_pos = target_pos - direction * 50.0
 	
 	print("Player attack animation starting...")
 	
@@ -486,12 +488,20 @@ func animate_player_attack() -> void:
 	# APPLY DAMAGE AT IMPACT MOMENT
 	if present_state["enemies"].size() > 0:
 		var target_enemy_data = present_state["enemies"][0]
-		target_enemy_data["hp"] -= present_state["player"]["damage"]
-		print("Player dealt ", present_state["player"]["damage"], " damage! Enemy HP: ", target_enemy_data["hp"])
+		var damage = present_state["player"]["damage"]
+		target_enemy_data["hp"] -= damage
+		print("Player dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
 		
+		# PLAY PLAYER'S ATTACK SOUND
 		player_entity.play_attack_sound()
-		apply_screen_shake(present_state["player"]["damage"] * 0.5)
-
+		
+		# SCREEN SHAKE
+		apply_screen_shake(damage * 0.5)
+		
+		# HIT REACTION: Enemy recoils backward
+		var hit_direction = (target_enemy.position - player_entity.position).normalized()
+		target_enemy.play_hit_reaction(hit_direction)
+		
 		# Update visual immediately
 		target_enemy.entity_data = target_enemy_data
 		target_enemy.update_display()
@@ -500,8 +510,16 @@ func animate_player_attack() -> void:
 		if target_enemy_data["hp"] <= 0:
 			print(target_enemy_data["name"], " defeated!")
 			present_state["enemies"].remove_at(0)
-			target_enemy.queue_free()
 			present_entities.erase(target_enemy)
+			
+			# FIX: Make enemy invisible but keep it alive for sound
+			target_enemy.visible = false
+			
+			# Schedule destruction after sound finishes
+			get_tree().create_timer(0.5).timeout.connect(func():
+				if is_instance_valid(target_enemy):
+					target_enemy.queue_free()
+			)
 	
 	# Phase 2: Brief pause at enemy (0.1 seconds)
 	await get_tree().create_timer(0.1).timeout
@@ -535,11 +553,17 @@ func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dict
 	# APPLY DAMAGE AT IMPACT MOMENT
 	var damage = enemy_data["damage"]
 	present_state["player"]["hp"] -= damage
-
+	print(enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_state["player"]["hp"])
+	
+	# PLAY ENEMY'S ATTACK SOUND
 	enemy.play_attack_sound()
+	
+	# SCREEN SHAKE
 	apply_screen_shake(damage * 0.5)
 	
-	print(enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_state["player"]["hp"])
+	# ADD THIS: HIT REACTION
+	var hit_direction = (player.position - enemy.position).normalized()
+	player.play_hit_reaction(hit_direction)
 	
 	# Update player visual immediately
 	player.entity_data = present_state["player"]

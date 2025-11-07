@@ -14,6 +14,9 @@ var timeline_type = "present"
 # Mouse hover state tracking
 var is_mouse_over = false
 
+# Original position (for hit reactions)
+var original_position = Vector2.ZERO
+
 func setup(data: Dictionary, player: bool = false, timeline: String = "present"):
 	"""Initialize entity with data from game manager"""
 	entity_data = data
@@ -22,6 +25,9 @@ func setup(data: Dictionary, player: bool = false, timeline: String = "present")
 
 func _ready():
 	"""Called when node enters scene tree"""
+	# Store original position for hit reactions
+	original_position = position
+	
 	# Update visuals
 	update_display()
 
@@ -94,3 +100,23 @@ func play_attack_sound():
 		print(entity_data.get("name", "Entity"), " playing attack sound")
 	else:
 		print(entity_data.get("name", "Entity"), " has no attack sound assigned")
+
+func play_hit_reaction(hit_direction: Vector2):
+	"""Play a quick recoil animation when hit"""
+	# Update original position to current position
+	original_position = position
+	
+	# Calculate knockback position (20 pixels back)
+	var knockback_pos = position + hit_direction * 20.0
+	
+	# Create non-blocking tween (runs independently)
+	var tween = create_tween()
+	
+	# Quick knockback (0.08 seconds)
+	tween.tween_property(self, "position", knockback_pos, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	
+	# Smooth return to original position (0.15 seconds)
+	tween.tween_property(self, "position", original_position, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	
+	# NOTE: This tween is NOT awaited - it runs in the background
+	# This allows attack animations to continue without blocking
