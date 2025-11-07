@@ -38,18 +38,18 @@ var carousel_states = []  # Which state each panel represents
 
 # Carousel position definitions (slot 0 = far-left, slot 2 = center/present)
 var carousel_positions = [
-	# Slot 0: Far-left decorative (barely visible)
+	# Slot 0: Far-left decorative (INVISIBLE - will add effects later)
 	{
 		"position": Vector2(50, 200),
 		"scale": Vector2(0.4, 0.4),
-		"modulate": Color(1.0, 1.0, 1.0, 0.3),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),  # Completely invisible
 		"z_index": 0
 	},
-	# Slot 1: Past (visible, faded)
+	# Slot 1: Past (fully visible, no fade)
 	{
 		"position": Vector2(200, 150),
 		"scale": Vector2(0.75, 0.75),
-		"modulate": Color(0.8, 0.8, 0.8, 0.7),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),  # Fully opaque
 		"z_index": 1
 	},
 	# Slot 2: Present (center, focused)
@@ -59,25 +59,25 @@ var carousel_positions = [
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 2
 	},
-	# Slot 3: Future (visible, faded)
+	# Slot 3: Future (fully visible, no fade)
 	{
 		"position": Vector2(1270, 150),
 		"scale": Vector2(0.75, 0.75),
-		"modulate": Color(0.8, 0.8, 0.8, 0.7),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),  # Fully opaque
 		"z_index": 1
 	},
-	# Slot 4: Far-right decorative (barely visible)
+	# Slot 4: Far-right decorative (INVISIBLE - will add effects later)
 	{
 		"position": Vector2(1570, 200),
 		"scale": Vector2(0.4, 0.4),
-		"modulate": Color(1.0, 1.0, 1.0, 0.3),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),  # Completely invisible
 		"z_index": 0
 	},
 	# Slot 5: Hidden off-screen right (for rotation)
 	{
 		"position": Vector2(2000, 250),
 		"scale": Vector2(0.2, 0.2),
-		"modulate": Color(1.0, 1.0, 1.0, 0.0),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": -1
 	}
 ]
