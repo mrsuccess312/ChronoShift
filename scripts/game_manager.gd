@@ -16,7 +16,7 @@ var turn_number = 0
 var game_over = false
 var card_played_this_turn = false
 
-# Entity tracking (ADD THESE LINES)
+# Entity tracking
 var past_entities = []
 var present_entities = []
 var future_entities = []
@@ -32,11 +32,63 @@ var future_arrows = []
 var shake_strength = 0.0
 var shake_decay = 5.0
 
-# References to UI elements (we'll connect these soon)
+# CAROUSEL SYSTEM - 6 Timeline Panels
+var carousel_panels = []  # Array of all 6 panel nodes
+var carousel_states = []  # Which state each panel represents
+
+# Carousel position definitions (slot 0 = far-left, slot 2 = center/present)
+var carousel_positions = [
+	# Slot 0: Far-left decorative (barely visible)
+	{
+		"position": Vector2(50, 200),
+		"scale": Vector2(0.4, 0.4),
+		"modulate": Color(1.0, 1.0, 1.0, 0.3),
+		"z_index": 0
+	},
+	# Slot 1: Past (visible, faded)
+	{
+		"position": Vector2(200, 150),
+		"scale": Vector2(0.75, 0.75),
+		"modulate": Color(0.8, 0.8, 0.8, 0.7),
+		"z_index": 1
+	},
+	# Slot 2: Present (center, focused)
+	{
+		"position": Vector2(585, 90),
+		"scale": Vector2(1.0, 1.0),
+		"modulate": Color(1.0, 1.0, 1.0, 1.0),
+		"z_index": 2
+	},
+	# Slot 3: Future (visible, faded)
+	{
+		"position": Vector2(1270, 150),
+		"scale": Vector2(0.75, 0.75),
+		"modulate": Color(0.8, 0.8, 0.8, 0.7),
+		"z_index": 1
+	},
+	# Slot 4: Far-right decorative (barely visible)
+	{
+		"position": Vector2(1570, 200),
+		"scale": Vector2(0.4, 0.4),
+		"modulate": Color(1.0, 1.0, 1.0, 0.3),
+		"z_index": 0
+	},
+	# Slot 5: Hidden off-screen right (for rotation)
+	{
+		"position": Vector2(2000, 250),
+		"scale": Vector2(0.2, 0.2),
+		"modulate": Color(1.0, 1.0, 1.0, 0.0),
+		"z_index": -1
+	}
+]
+
 # References to UI elements
-@onready var past_panel = $UIRoot/PastPanel
-@onready var present_panel = $UIRoot/PresentPanel
-@onready var future_panel = $UIRoot/FuturePanel
+@onready var carousel_container = $UIRoot/CarouselContainer
+@onready var decorative_past_panel = $UIRoot/CarouselContainer/DecorativePastPanel
+@onready var past_panel = $UIRoot/CarouselContainer/PastPanel
+@onready var present_panel = $UIRoot/CarouselContainer/PresentPanel
+@onready var future_panel = $UIRoot/CarouselContainer/FuturePanel
+@onready var decorative_future_panel = $UIRoot/CarouselContainer/DecorativeFuturePanel
 @onready var play_button = $UIRoot/PlayButton
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
@@ -46,6 +98,10 @@ var shake_decay = 5.0
 func _ready():
 	print("ChronoShift - Game Manager Ready!")
 	play_button.pressed.connect(_on_play_button_pressed)
+	
+	# Initialize carousel system
+	setup_carousel()
+	
 	initialize_game()
 
 func _input(event):
@@ -62,6 +118,76 @@ func toggle_fullscreen():
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		print("Switched to Fullscreen mode")
+
+func setup_carousel():
+	"""Initialize the 6-panel carousel system"""
+	# Add all 6 panels to carousel array (order matters for rotation)
+	carousel_panels = [
+		decorative_past_panel,  # Slot 0
+		past_panel,             # Slot 1
+		present_panel,          # Slot 2
+		future_panel,           # Slot 3
+		decorative_future_panel,# Slot 4
+		null                    # Slot 5 (no panel yet, will be created during rotation)
+	]
+	
+	# Track which timeline state each panel represents
+	# "decorative" = empty panel, "past" = past_state, "present" = present_state, "future" = future_state
+	carousel_states = [
+		"decorative",  # Slot 0
+		"past",        # Slot 1
+		"present",     # Slot 2
+		"future",      # Slot 3
+		"decorative",  # Slot 4
+		"decorative"   # Slot 5 (off-screen)
+	]
+	
+	# Apply initial carousel positions to all panels
+	for i in range(carousel_panels.size()):
+		if carousel_panels[i] != null:
+			apply_carousel_position(carousel_panels[i], i)
+	
+	# CRITICAL: Force Present panel to be drawn last (on top)
+	if present_panel:
+		carousel_container.move_child(present_panel, -1)
+	
+	print("Carousel system initialized with 6 positions")
+
+func apply_carousel_position(panel: Panel, slot_index: int):
+	"""Apply position, scale, modulate, and z-index to a panel based on slot"""
+	if slot_index < 0 or slot_index >= carousel_positions.size():
+		return
+	
+	var pos_data = carousel_positions[slot_index]
+	
+	# Apply visual properties
+	panel.position = pos_data["position"]
+	panel.scale = pos_data["scale"]
+	panel.modulate = pos_data["modulate"]
+	
+	# CRITICAL FIX: Use z_as_relative = false and set explicit z_index
+	panel.z_as_relative = false
+	panel.z_index = pos_data["z_index"]
+	
+	# Force panel to move to correct layer in scene tree
+	# Higher z_index panels need to be LATER in draw order
+	var parent = panel.get_parent()
+	if parent:
+		parent.move_child(panel, -1)  # Move to end first
+		# Then reorder based on z_index
+		if slot_index == 2:  # Present - draw last (on top)
+			parent.move_child(panel, parent.get_child_count() - 1)
+	
+	# Update panel size based on slot (decorative panels are smaller)
+	if slot_index == 0 or slot_index == 4 or slot_index == 5:
+		# Decorative panels: 300x500
+		panel.size = Vector2(300, 500)
+	elif slot_index == 1 or slot_index == 3:
+		# Past/Future panels: 450x600
+		panel.size = Vector2(450, 600)
+	else:
+		# Present panel: 750x750
+		panel.size = Vector2(750, 750)
 
 func initialize_game():
 	# Set up initial game state
@@ -98,33 +224,26 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		old_entity.queue_free()
 	entity_array.clear()
 	
-	# Get the appropriate panel
-	var panel = null
-	match timeline_name:
-		"past":
-			panel = past_panel
-		"present":
-			panel = present_panel
-		"future":
-			panel = future_panel
+	# Get the appropriate panel based on carousel state
+	var panel = get_panel_for_timeline(timeline_name)
 	
 	if panel == null:
 		print("ERROR: Could not find panel for ", timeline_name)
 		return
 	
-	# Panel dimensions (600x750)
-	var panel_width = 600
-	var panel_height = 750
+	# Use each panel's actual dimensions for proper centering
+	var panel_width = panel.size.x
+	var panel_height = panel.size.y
 	var center_x = panel_width / 2
 	
 	# Create enemy entities in semicircle formation at top
 	if state_data.has("enemies"):
 		var enemy_count = state_data["enemies"].size()
 		
-		# Semicircle parameters
+		# Semicircle parameters (scale with actual panel size)
 		var arc_center_x = center_x
-		var arc_center_y = 250
-		var arc_radius = 120
+		var arc_center_y = panel_height * 0.33
+		var arc_radius = panel_width * 0.2
 		var arc_span = PI * 0.6
 		
 		for i in range(enemy_count):
@@ -155,14 +274,21 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		# CRITICAL: Call setup() BEFORE add_child()
 		player_entity.setup(state_data["player"], true, timeline_name)
 		
-		# Position player at bottom center
-		player_entity.position = Vector2(center_x, panel_height - 150)
+		# Position player at bottom center (based on actual panel size)
+		player_entity.position = Vector2(center_x, panel_height * 0.8)
 		
 		# Now add to scene tree
 		panel.add_child(player_entity)
 		entity_array.append(player_entity)
 	
-	print("=== Finished creating entities for ", timeline_name, " ===\n")
+	print("=== Finished creating entities for ", timeline_name, " ===")
+
+func get_panel_for_timeline(timeline_name: String) -> Panel:
+	"""Find which panel currently represents the given timeline"""
+	for i in range(carousel_states.size()):
+		if carousel_states[i] == timeline_name:
+			return carousel_panels[i]
+	return null
 
 func create_attack_arrows(timeline_name: String, state_data: Dictionary, entity_array: Array, arrow_array: Array):
 	"""Create attack arrows for a timeline"""
@@ -172,14 +298,7 @@ func create_attack_arrows(timeline_name: String, state_data: Dictionary, entity_
 	arrow_array.clear()
 	
 	# Get the appropriate panel
-	var panel = null
-	match timeline_name:
-		"present":
-			panel = present_panel
-		"future":
-			panel = future_panel
-		_:
-			return  # No arrows for Past
+	var panel = get_panel_for_timeline(timeline_name)
 	
 	if panel == null:
 		return
@@ -299,8 +418,6 @@ func calculate_future():
 	
 	if future_state["player"]["hp"] <= 0:
 		print("WARNING: Future shows player death!")
-		# Optional: could disable Play button here as a warning
-		# play_button.disabled = true
 
 func update_all_timelines():
 	"""Update visual displays for all three timelines"""	
@@ -310,11 +427,11 @@ func update_all_timelines():
 	
 	# Update Present timeline
 	create_entity_visuals("present", present_state, present_entities)
-	create_attack_arrows("present", present_state, present_entities, present_arrows)  # ADD THIS
+	create_attack_arrows("present", present_state, present_entities, present_arrows)
 	
 	# Update Future timeline
 	create_entity_visuals("future", future_state, future_entities)
-	create_attack_arrows("future", future_state, future_entities, future_arrows)  # ADD THIS
+	create_attack_arrows("future", future_state, future_entities, future_arrows)
 	
 	# Update UI displays
 	update_damage_display()
@@ -376,7 +493,7 @@ func _on_card_played(card_data: Dictionary):
 	# Mark that a card was played
 	card_played_this_turn = true
 	
-	# Disable ALL cards (ADD THIS SECTION)
+	# Disable ALL cards
 	for card_node in card_nodes:
 		card_node.mark_as_used()
 	
@@ -387,7 +504,7 @@ func _on_card_played(card_data: Dictionary):
 func _on_play_button_pressed():
 	print("PLAY button pressed! Executing turn...")
 	
-	# Hide arrows before animations (ADD THIS SECTION)
+	# Hide arrows before animations
 	for arrow in present_arrows:
 		arrow.hide_arrow()
 	for arrow in future_arrows:
@@ -512,7 +629,7 @@ func animate_player_attack() -> void:
 			present_state["enemies"].remove_at(0)
 			present_entities.erase(target_enemy)
 			
-			# FIX: Make enemy invisible but keep it alive for sound
+			# Make enemy invisible but keep it alive for sound
 			target_enemy.visible = false
 			
 			# Schedule destruction after sound finishes
@@ -539,7 +656,7 @@ func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dict
 	
 	# Calculate position near player (not exactly at center)
 	var direction = (target_pos - original_pos).normalized()
-	var attack_pos = target_pos - direction * 50.0  # Stop 50 pixels before player
+	var attack_pos = target_pos - direction * 50.0
 	
 	# Create tween for smooth animation
 	var tween = create_tween()
@@ -561,7 +678,7 @@ func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dict
 	# SCREEN SHAKE
 	apply_screen_shake(damage * 0.5)
 	
-	# ADD THIS: HIT REACTION
+	# HIT REACTION
 	var hit_direction = (player.position - enemy.position).normalized()
 	player.play_hit_reaction(hit_direction)
 	
@@ -677,10 +794,10 @@ func apply_card_effect(card_data: Dictionary):
 			
 func disable_all_cards():
 	"""Disable all cards (used when player dies or game over)"""
-	card_played_this_turn = true  # Prevent card plays
+	card_played_this_turn = true
 	
 	for card_node in card_nodes:
-		if card_node and is_instance_valid(card_node):  # ← ADD THIS CHECK
+		if card_node and is_instance_valid(card_node):
 			card_node.mark_as_used()
 			card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	

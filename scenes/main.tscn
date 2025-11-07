@@ -49,54 +49,101 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="PastPanel" type="Panel" parent="UIRoot"]
+[node name="CarouselContainer" type="Control" parent="UIRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="DecorativePastPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 15.0
-offset_top = 90.0
-offset_right = 615.0
-offset_bottom = 840.0
+offset_left = 50.0
+offset_top = 200.0
+offset_right = 350.0
+offset_bottom = 700.0
+pivot_offset = Vector2(150, 250)
 theme_override_styles/panel = SubResource("StyleBoxFlat_sgp6g")
 
-[node name="PastLabel" type="Label" parent="UIRoot/PastPanel"]
+[node name="DecorativePastLabel" type="Label" parent="UIRoot/CarouselContainer/DecorativePastPanel"]
 layout_mode = 0
 offset_top = 15.0
-offset_right = 600.0
+offset_right = 300.0
 offset_bottom = 60.0
-theme_override_font_sizes/font_size = 27
+theme_override_font_sizes/font_size = 20
 text = "⟲ PAST"
 horizontal_alignment = 1
 
-[node name="PresentPanel" type="Panel" parent="UIRoot"]
+[node name="PastPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 645.0
-offset_top = 90.0
-offset_right = 1245.0
-offset_bottom = 840.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_o5qli")
+offset_left = 200.0
+offset_top = 150.0
+offset_right = 650.0
+offset_bottom = 750.0
+pivot_offset = Vector2(225, 300)
+theme_override_styles/panel = SubResource("StyleBoxFlat_sgp6g")
 
-[node name="PresentLabel" type="Label" parent="UIRoot/PresentPanel"]
+[node name="PastLabel" type="Label" parent="UIRoot/CarouselContainer/PastPanel"]
 layout_mode = 0
 offset_top = 15.0
-offset_right = 600.0
+offset_right = 450.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 24
+text = "⟲ PAST"
+horizontal_alignment = 1
+
+[node name="PresentPanel" type="Panel" parent="UIRoot/CarouselContainer"]
+layout_mode = 0
+offset_left = 585.0
+offset_top = 90.0
+offset_right = 1335.0
+offset_bottom = 840.0
+pivot_offset = Vector2(375, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_o5qli")
+
+[node name="PresentLabel" type="Label" parent="UIRoot/CarouselContainer/PresentPanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 750.0
 offset_bottom = 60.0
 theme_override_font_sizes/font_size = 27
 text = "◉ PRESENT"
 horizontal_alignment = 1
 
-[node name="FuturePanel" type="Panel" parent="UIRoot"]
+[node name="FuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 1275.0
-offset_top = 90.0
-offset_right = 1875.0
-offset_bottom = 840.0
+offset_left = 1270.0
+offset_top = 150.0
+offset_right = 1720.0
+offset_bottom = 750.0
+pivot_offset = Vector2(225, 300)
 theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
 
-[node name="FutureLabel" type="Label" parent="UIRoot/FuturePanel"]
+[node name="FutureLabel" type="Label" parent="UIRoot/CarouselContainer/FuturePanel"]
 layout_mode = 0
 offset_top = 15.0
-offset_right = 600.0
+offset_right = 450.0
 offset_bottom = 60.0
-theme_override_font_sizes/font_size = 27
+theme_override_font_sizes/font_size = 24
+text = "⟳ FUTURE"
+horizontal_alignment = 1
+
+[node name="DecorativeFuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
+layout_mode = 0
+offset_left = 1570.0
+offset_top = 200.0
+offset_right = 1870.0
+offset_bottom = 700.0
+pivot_offset = Vector2(150, 250)
+theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
+
+[node name="DecorativeFutureLabel" type="Label" parent="UIRoot/CarouselContainer/DecorativeFuturePanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 300.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 20
 text = "⟳ FUTURE"
 horizontal_alignment = 1
 
