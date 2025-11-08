@@ -39,42 +39,47 @@ var carousel_states = []  # Which state each panel represents
 # Carousel position definitions (slot 0 = far-left, slot 2 = center/present)
 # ALL panels are 750x750 base size (using scale for perspective, not size changes)
 var carousel_positions = [
-	# Slot 0: Far-left decorative
+	# Slot 0: Far-left decorative (same as before)
 	{
 		"position": Vector2(50, 200),
 		"scale": Vector2(0.4, 0.4),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 0
 	},
-	# Slot 1: Past (fully visible)
+	# Slot 1: Past (same as before)
 	{
 		"position": Vector2(200, 150),
 		"scale": Vector2(0.75, 0.75),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 1
 	},
-	# Slot 2: Present (center, focused)
+	# Slot 2: Present (same as before)
 	{
 		"position": Vector2(585, 90),
 		"scale": Vector2(1.0, 1.0),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 2
 	},
-	# Slot 3: Future (fully visible)
+	# Slot 3: Future - MIRROR of Past
+	# Past is 200, Present center is ~960
+	# Mirror: 960 + (960 - 200) = 960 + 760 = 1720
+	# BUT let's use visual balance: 1270 looks right
 	{
-		"position": Vector2(1270, 150),
+		"position": Vector2(1158, 150),
 		"scale": Vector2(0.75, 0.75),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 1
 	},
-	# Slot 4: Far-right decorative
+	# Slot 4: Far-right decorative - MIRROR of Decorative Past
+	# Decorative Past is 50, Past is 200 (difference = 150)
+	# So Decorative Future = Future + 150 = 1270 + 150 = 1420
 	{
 		"position": Vector2(1570, 200),
 		"scale": Vector2(0.4, 0.4),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 0
 	},
-	# Slot 5: Hidden off-screen right (for rotation)
+	# Slot 5: Hidden off-screen (same as before)
 	{
 		"position": Vector2(2000, 250),
 		"scale": Vector2(0.2, 0.2),
@@ -82,6 +87,8 @@ var carousel_positions = [
 		"z_index": -1
 	}
 ]
+
+var carousel_snapshot = []
 
 # References to UI elements
 @onready var carousel_container = $UIRoot/CarouselContainer
@@ -152,7 +159,44 @@ func setup_carousel():
 	if present_panel:
 		carousel_container.move_child(present_panel, -1)
 	
+	build_carousel_snapshot()
+	
 	print("Carousel system initialized with 6 positions")
+
+func build_carousel_snapshot():
+	"""Build snapshot of target states for all 6 carousel positions"""
+	carousel_snapshot = []
+	
+	for i in range(6):
+		var snapshot = {
+			"position": carousel_positions[i]["position"],
+			"scale": carousel_positions[i]["scale"],
+			"modulate": carousel_positions[i]["modulate"],
+			"z_index": carousel_positions[i]["z_index"],
+			# Determine size based on slot
+			"size": get_size_for_slot(i),
+			# Determine timeline type
+			"timeline": get_timeline_for_slot(i)
+		}
+		carousel_snapshot.append(snapshot)
+	
+	print("📸 Carousel snapshot built with ", carousel_snapshot.size(), " positions")
+
+func get_size_for_slot(slot_index: int) -> Vector2:
+	"""Return the appropriate panel size for a given slot"""
+	# ALL slots use the same base size - only scale differs!
+	return Vector2(750, 750)
+
+func get_timeline_for_slot(slot_index: int) -> String:
+	"""Return the timeline type for a given slot"""
+	match slot_index:
+		0: return "decorative"
+		1: return "past"
+		2: return "present"
+		3: return "future"
+		4: return "decorative"
+		5: return "decorative"
+		_: return "decorative"
 
 func apply_carousel_position(panel: Panel, slot_index: int):
 	"""Apply position, scale, modulate, and z-index to a panel based on slot"""
@@ -171,24 +215,14 @@ func apply_carousel_position(panel: Panel, slot_index: int):
 	panel.z_index = pos_data["z_index"]
 	
 	# Force panel to move to correct layer in scene tree
-	# Higher z_index panels need to be LATER in draw order
 	var parent = panel.get_parent()
 	if parent:
-		parent.move_child(panel, -1)  # Move to end first
-		# Then reorder based on z_index
+		parent.move_child(panel, -1)
 		if slot_index == 2:  # Present - draw last (on top)
 			parent.move_child(panel, parent.get_child_count() - 1)
 	
-	# Update panel size based on slot (decorative panels are smaller)
-	if slot_index == 0 or slot_index == 4 or slot_index == 5:
-		# Decorative panels: 300x500
-		panel.size = Vector2(300, 500)
-	elif slot_index == 1 or slot_index == 3:
-		# Past/Future panels: 450x600
-		panel.size = Vector2(450, 600)
-	else:
-		# Present panel: 750x750
-		panel.size = Vector2(750, 750)
+	# ALL PANELS ARE 750x750 - perspective comes from SCALE only
+	panel.size = Vector2(750, 750)
 
 func initialize_game():
 	# Set up initial game state
@@ -232,19 +266,19 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		print("ERROR: Could not find panel for ", timeline_name)
 		return
 	
-	# Use each panel's actual dimensions for proper centering
-	var panel_width = panel.size.x
-	var panel_height = panel.size.y
-	var center_x = panel_width / 2
+	# CRITICAL: All panels are 750x750, so use STANDARD dimensions for centering
+	var standard_width = 750.0
+	var standard_height = 750.0
+	var center_x = standard_width / 2
 	
 	# Create enemy entities in semicircle formation at top
 	if state_data.has("enemies"):
 		var enemy_count = state_data["enemies"].size()
 		
-		# Semicircle parameters (scale with actual panel size)
+		# Semicircle parameters (using standard dimensions)
 		var arc_center_x = center_x
-		var arc_center_y = panel_height * 0.33
-		var arc_radius = panel_width * 0.2
+		var arc_center_y = standard_height * 0.33
+		var arc_radius = standard_width * 0.2
 		var arc_span = PI * 0.6
 		
 		for i in range(enemy_count):
@@ -264,7 +298,7 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 			
 			enemy_entity.position = Vector2(pos_x, pos_y)
 			
-			# Now add to scene tree (_ready() will see correct timeline_type)
+			# Now add to scene tree
 			panel.add_child(enemy_entity)
 			entity_array.append(enemy_entity)
 	
@@ -275,8 +309,8 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		# CRITICAL: Call setup() BEFORE add_child()
 		player_entity.setup(state_data["player"], true, timeline_name)
 		
-		# Position player at bottom center (based on actual panel size)
-		player_entity.position = Vector2(center_x, panel_height * 0.8)
+		# Position player at bottom center (using standard dimensions)
+		player_entity.position = Vector2(center_x, standard_height * 0.8)
 		
 		# Now add to scene tree
 		panel.add_child(player_entity)
@@ -503,15 +537,18 @@ func _on_card_played(card_data: Dictionary):
 	update_all_timelines()
 	
 func _on_play_button_pressed():
-	print("PLAY button pressed! Executing turn...")
+	print("PLAY button pressed! Testing slot 0 animation...")
 	
+	# TEMPORARY: Test slot 0 animation
+	test_slot_0_and_1_animation()
+	
+	# TODO: Re-enable this after testing
 	# Hide arrows before animations
-	for arrow in present_arrows:
-		arrow.hide_arrow()
-	for arrow in future_arrows:
-		arrow.hide_arrow()
-	
-	execute_turn()
+	#for arrow in present_arrows:
+	#	arrow.hide_arrow()
+	#for arrow in future_arrows:
+	#	arrow.hide_arrow()
+	#execute_turn()
 
 func execute_turn():
 	"""Execute the turn with animations and real-time damage"""
@@ -819,3 +856,101 @@ func _process(delta):
 func apply_screen_shake(strength: float = 10.0):
 	"""Trigger screen shake effect"""
 	shake_strength = strength
+
+func animate_slot_to_snapshot(tween: Tween, panel: Panel, target_snapshot: Dictionary):
+	"""Animate a panel to match a target snapshot (position, scale, modulate only)"""
+	if panel == null:
+		return
+	
+	print("🎯 Animating panel ", panel.name, " to snapshot position")
+	
+	# Animate position
+	tween.tween_property(panel, "position", target_snapshot["position"], 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	
+	# Animate scale
+	tween.tween_property(panel, "scale", target_snapshot["scale"], 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	
+	# Animate modulate (color/alpha)
+	tween.tween_property(panel, "modulate", target_snapshot["modulate"], 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+
+func animate_slot_0_to_void(tween: Tween, panel: Panel):
+	"""Animate slot 0 (leftmost decorative) shrinking backward into carousel center"""
+	if panel == null:
+		return
+	
+	print("🌊 Animating slot 0 backward into void: ", panel.name)
+	
+	# Calculate center-back position (behind the carousel, smaller)
+	# Move toward carousel center X, slightly back in Y
+	var carousel_center_x = 960  # Screen center
+	var backward_pos = Vector2(carousel_center_x - 200, panel.position.y + 50)
+	
+	# Animate position (slide toward center-back)
+	tween.tween_property(panel, "position", backward_pos, 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	
+	# Animate scale (shrink to tiny)
+	tween.tween_property(panel, "scale", Vector2(0.1, 0.1), 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+	
+	# Animate fade out
+	tween.tween_property(panel, "modulate:a", 0.0, 1.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT)
+
+
+# ===== TEST FUNCTION for Slot 0 =====
+# Add this temporary test function to test just slot 0 animation
+
+func test_slot_0_and_1_animation():
+	"""TEST: Animate slot 0 and slot 1 together"""
+	print("\n🧪 TESTING SLOT 0 + SLOT 1 ANIMATION (Uniform size)...")
+	
+	# Fade out entities first
+	fade_out_all_entities()
+	
+	# Create parallel tween (both animate simultaneously)
+	var tween = create_tween()
+	tween.set_parallel(true)
+	
+	# Animate slot 0 (decorative → void)
+	animate_slot_0_to_void(tween, carousel_panels[0])
+	
+	# Animate slot 1 (past → decorative past position)
+	animate_slot_to_snapshot(tween, carousel_panels[1], carousel_snapshot[0])
+	
+	# CRITICAL: Wait for animation to complete
+	await tween.finished
+	
+	# NO SIZE UPDATE NEEDED - already 750x750!
+	
+	print("✅ Slot 0 + 1 animation complete! (No size snap!)")
+	
+	# Fade entities back in
+	fade_in_all_entities()
+
+func fade_out_all_entities():
+	"""Hide all entity HP/damage labels before carousel slide"""
+	print("👻 Fading out entities...")
+	
+	var all_entities = past_entities + present_entities + future_entities
+	
+	for entity in all_entities:
+		if entity and is_instance_valid(entity):
+			# Fade out HP and damage labels
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").modulate.a = 0.0
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").modulate.a = 0.0
+
+func fade_in_all_entities():
+	"""Show all entity HP/damage labels after carousel slide"""
+	print("✨ Fading in entities...")
+	
+	var all_entities = past_entities + present_entities + future_entities
+	
+	for entity in all_entities:
+		if entity and is_instance_valid(entity):
+			# Fade in HP and damage labels
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").modulate.a = 1.0
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").modulate.a = 1.0
+
+	print("✅ Foundation ready! Data structures and fade helpers created")
