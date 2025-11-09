@@ -1,4 +1,4 @@
-[gd_scene load_steps=6 format=3 uid="uid://s3bf3lblnxxy"]
+[gd_scene load_steps=8 format=3 uid="uid://s3bf3lblnxxy"]
 
 [ext_resource type="Script" uid="uid://dm1ygihgiexpr" path="res://scripts/game_manager.gd" id="1_o5qli"]
 
@@ -19,6 +19,26 @@ border_width_bottom = 2
 border_color = Color(0.2901961, 0.61960787, 1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0wfyh"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_decorative_future"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jyhfs"]
 bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
 border_width_left = 2
 border_width_top = 2
@@ -77,9 +97,9 @@ horizontal_alignment = 1
 
 [node name="PastPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 135.0
+offset_left = 136.0
 offset_top = 125.0
-offset_right = 735.0
+offset_right = 736.0
 offset_bottom = 875.0
 scale = Vector2(0.75, 0.75)
 pivot_offset = Vector2(300, 375)
@@ -114,9 +134,9 @@ horizontal_alignment = 1
 
 [node name="FuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 1185.0
+offset_left = 1184.0
 offset_top = 125.0
-offset_right = 1785.0
+offset_right = 1784.0
 offset_bottom = 875.0
 scale = Vector2(0.75, 0.75)
 pivot_offset = Vector2(300, 375)
@@ -139,12 +159,31 @@ offset_right = 1920.0
 offset_bottom = 900.0
 scale = Vector2(0.6, 0.6)
 pivot_offset = Vector2(300, 375)
-theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
+theme_override_styles/panel = SubResource("StyleBoxFlat_decorative_future")
 
 [node name="DecorativeFutureLabel" type="Label" parent="UIRoot/CarouselContainer/DecorativeFuturePanel"]
 layout_mode = 0
 offset_top = 15.0
 offset_right = 300.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 20
+text = "⟳ FUTURE"
+horizontal_alignment = 1
+
+[node name="IntermediateFuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
+layout_mode = 0
+offset_left = 1350.0
+offset_top = 175.0
+offset_right = 1950.0
+offset_bottom = 925.0
+scale = Vector2(0.5, 0.5)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_jyhfs")
+
+[node name="IntermediateFutureLabel" type="Label" parent="UIRoot/CarouselContainer/IntermediateFuturePanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 600.0
 offset_bottom = 60.0
 theme_override_font_sizes/font_size = 20
 text = "⟳ FUTURE"
