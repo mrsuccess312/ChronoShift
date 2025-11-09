@@ -97,7 +97,7 @@ var carousel_positions = [
 	},
 	# Slot 5: Intermediate (VISIBLE, further right)
 	{
-		"position": Vector2(1350, 175),   # Visible position!
+		"position": Vector2(1300, 175),   # Visible position!
 		"scale": Vector2(0.5, 0.5),        # Smaller than decorative
 		"modulate": Color(1.0, 1.0, 1.0, 0.7),  # Semi-transparent!
 		"z_index": -1
@@ -148,32 +148,27 @@ func toggle_fullscreen():
 # ===== CAROUSEL SETUP =====
 
 func setup_carousel():
-	"""Initialize the 7-panel carousel system"""
-	print("Setting up 7-panel carousel...")
+	"""Initialize carousel with 6 real panels (no null placeholder)"""
+	print("Setting up carousel with 6 panels...")
 	
-	# Create 7 TimelinePanel objects
 	timeline_panels = [
 		TimelinePanel.new(decorative_past_panel, "decorative", 0),
 		TimelinePanel.new(past_panel, "past", 1),
 		TimelinePanel.new(present_panel, "present", 2),
 		TimelinePanel.new(future_panel, "future", 3),
 		TimelinePanel.new(decorative_future_panel, "decorative", 4),
-		TimelinePanel.new(intermediate_future_panel, "decorative", 5),  # NEW!
-		TimelinePanel.new(null, "void", 6)  # Placeholder for void
-	]
+		TimelinePanel.new(intermediate_future_panel, "decorative", 5)
+	]  # Only 6 panels!
 	
-	# Apply initial positions
-	for i in range(timeline_panels.size() - 1):  # Skip slot 6 (null)
+	for i in range(timeline_panels.size()):
 		if timeline_panels[i].panel_node != null:
 			apply_carousel_position(timeline_panels[i].panel_node, i)
 	
-	# Force Present on top
 	if present_panel:
 		carousel_container.move_child(present_panel, -1)
 	
 	build_carousel_snapshot()
-	
-	print("✅ 7-panel carousel initialized!")
+	print("✅ Carousel initialized with ", timeline_panels.size(), " panels")
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""
@@ -203,12 +198,30 @@ func apply_carousel_position(panel: Panel, slot_index: int):
 	panel.z_as_relative = false
 	panel.z_index = pos_data["z_index"]
 	
-	# Force correct draw order
+	# CRITICAL FIX: Force scene tree draw order based on z_index
 	var parent = panel.get_parent()
 	if parent:
-		parent.move_child(panel, -1)
-		if slot_index == 2:  # Present - draw last
-			parent.move_child(panel, parent.get_child_count() - 1)
+		# Move to correct position in scene tree based on z_index
+		# Lower z_index = earlier in tree (drawn first, appears behind)
+		# Higher z_index = later in tree (drawn last, appears on top)
+		
+		# Get all panels and sort by z_index
+		var all_panels = []
+		for child in parent.get_children():
+			if child is Panel and child != panel:
+				all_panels.append(child)
+		
+		# Find correct insert position based on z_index
+		var insert_position = 0
+		for other_panel in all_panels:
+			if other_panel.z_index < panel.z_index:
+				insert_position += 1
+		
+		# Move panel to correct position
+		parent.move_child(panel, insert_position)
+		
+		print("  Applied position to ", panel.name, " at slot ", slot_index, 
+			  " with z_index ", panel.z_index, " at scene position ", insert_position)
 
 
 # ===== GAME INITIALIZATION =====
@@ -462,6 +475,15 @@ func calculate_future_state():
 func carousel_slide_animation():
 	"""Execute elegant 7-panel carousel slide"""
 	print("\n🎠 Starting 7-panel carousel slide...")
+	print("  Panel array size: ", timeline_panels.size())
+	
+	# Verify all panels exist
+	for i in range(timeline_panels.size()):
+		var tp = timeline_panels[i]
+		if tp.panel_node == null:
+			print("  ⚠️ WARNING: Panel ", i, " is NULL!")
+		else:
+			print("  ✓ Panel ", i, " exists (", tp.timeline_type, ")")
 	
 	# STEP 1: Snapshots
 	var present_tp = get_timeline_panel("present")
@@ -471,55 +493,75 @@ func carousel_slide_animation():
 	hide_ui_for_carousel()
 	delete_all_arrows()
 	
-	# STEP 3: Update Future entities to match Present formation
-	var future_tp = get_timeline_panel("future")
-	if future_tp.state.get("enemies", []).size() < present_tp.state.get("enemies", []).size():
-		future_tp.state["enemies"] = snapshot_present_state["enemies"].duplicate(true)
-		create_timeline_entities(future_tp)
+	# STEP 3: Get panels BY SLOT INDEX (safer than by timeline_type)
+	# After rotations, timeline_type might not match slot position!
+	var slot_2_tp = timeline_panels[2]  # Present
+	var slot_3_tp = timeline_panels[3]  # Future
+	var slot_4_tp = timeline_panels[4]  # Decorative Future
+	var slot_5_tp = timeline_panels[5]  # Intermediate
 	
-	# STEP 4: Prepare new Future in Decorative Future (slot 4)
-	var decorative_future_tp = timeline_panels[4]
+	# Update Future entities to match Present formation
+	if slot_3_tp.state.get("enemies", []).size() < slot_2_tp.state.get("enemies", []).size():
+		slot_3_tp.state["enemies"] = snapshot_present_state["enemies"].duplicate(true)
+		create_timeline_entities(slot_3_tp)
+	
+	# STEP 4: Prepare new Future in slot 4 (Decorative Future position)
 	var new_future_state = calculate_future_from_state(snapshot_present_state)
-	decorative_future_tp.timeline_type = "future"
-	decorative_future_tp.state = new_future_state
-	create_timeline_entities(decorative_future_tp)
+	slot_4_tp.timeline_type = "future"
+	slot_4_tp.state = new_future_state
+	create_timeline_entities(slot_4_tp)
 	
-	# STEP 5: Prepare Intermediate panel (slot 5) as NEXT Decorative Future
-	var intermediate_tp = timeline_panels[5]
+	# STEP 5: Prepare Intermediate (slot 5)
 	var future_plus_one_state = calculate_future_from_state(new_future_state)
-	intermediate_tp.timeline_type = "decorative"
-	intermediate_tp.state = future_plus_one_state
+	slot_5_tp.timeline_type = "decorative"
+	slot_5_tp.state = future_plus_one_state
+	create_timeline_entities(slot_5_tp)
+	print("✅ Intermediate panel prepared")
 	
-	# ALWAYS create entities for intermediate (they'll be visible during animation)
-	create_timeline_entities(intermediate_tp)
-	print("✅ Intermediate panel prepared (visible, will slide in)")
+	# STEP 6: Duplicate StyleBoxes (use slot indices!)
+	var present_stylebox = slot_2_tp.panel_node.get_theme_stylebox("panel").duplicate()
+	slot_2_tp.panel_node.add_theme_stylebox_override("panel", present_stylebox)
 	
-	# STEP 6: Z-index management
-	present_tp.panel_node.z_index = 1
-	future_tp.panel_node.z_index = 2
-	decorative_future_tp.panel_node.z_index = 0
-	intermediate_tp.panel_node.z_index = -1
+	var future_stylebox = slot_3_tp.panel_node.get_theme_stylebox("panel").duplicate()
+	slot_3_tp.panel_node.add_theme_stylebox_override("panel", future_stylebox)
 	
-	# STEP 7: Animate ALL 6 visible panels
+	# STEP 7: Z-index management - ADD NULL CHECKS
+	if timeline_panels[0].panel_node != null:
+		timeline_panels[0].panel_node.z_index = 0   # Decorative Past
+	
+	if timeline_panels[1].panel_node != null:
+		timeline_panels[1].panel_node.z_index = 1   # Past
+	
+	if slot_2_tp.panel_node != null:
+		slot_2_tp.panel_node.z_index = 2            # Present
+	
+	if slot_3_tp.panel_node != null:
+		slot_3_tp.panel_node.z_index = 1            # Future
+	
+	if slot_4_tp.panel_node != null:
+		slot_4_tp.panel_node.z_index = 0            # Decorative Future
+	
+	if slot_5_tp.panel_node != null:
+		slot_5_tp.panel_node.z_index = -1           # Intermediate
+	else:
+		print("  ⚠️ ERROR: slot_5_tp.panel_node is NULL at line 512!")
+	
+	# STEP 8: Animate ALL 6 panels
 	var tween = create_tween()
 	tween.set_parallel(true)
 	
-	# Slot 0 → void (backward rotation)
 	animate_slot_to_void(tween, timeline_panels[0].panel_node)
-	
-	# Slots 1-5 → slide left
 	animate_slot_to_snapshot(tween, timeline_panels[1].panel_node, carousel_snapshot[0])
-	animate_slot_to_snapshot(tween, timeline_panels[2].panel_node, carousel_snapshot[1])
-	animate_slot_to_snapshot(tween, timeline_panels[3].panel_node, carousel_snapshot[2])
-	animate_slot_to_snapshot(tween, timeline_panels[4].panel_node, carousel_snapshot[3])
-	animate_slot_to_snapshot(tween, timeline_panels[5].panel_node, carousel_snapshot[4])
+	animate_slot_to_snapshot(tween, slot_2_tp.panel_node, carousel_snapshot[1])
+	animate_slot_to_snapshot(tween, slot_3_tp.panel_node, carousel_snapshot[2])
+	animate_slot_to_snapshot(tween, slot_4_tp.panel_node, carousel_snapshot[3])
+	animate_slot_to_snapshot(tween, slot_5_tp.panel_node, carousel_snapshot[4])
 	
-	# Color animations (NOW on unique StyleBox instances!)
-	print("🎨 Animating colors...")
-	animate_panel_colors(tween, present_tp.panel_node, "past")
-	animate_panel_colors(tween, future_tp.panel_node, "present")
-	
-	# STEP 8: Wait for animation
+	# Color animations (on the panels that are changing timeline_type)
+	animate_panel_colors(tween, slot_2_tp.panel_node, "past")     # Present → Past
+	animate_panel_colors(tween, slot_3_tp.panel_node, "present")  # Future → Present
+	animate_panel_colors(tween, timeline_panels[0].panel_node, "future")
+
 	await tween.finished
 	print("✅ Panel animations complete!")
 	
@@ -536,32 +578,6 @@ func carousel_slide_animation():
 	update_panel_labels()
 	
 	print("✅ Carousel slide complete!")
-
-func rotate_timeline_panels():
-	"""Rotate timeline panels - now handles the new panel from void"""
-	print("🔄 Rotating timeline panels array...")
-	
-	# After animation:
-	# Old slot 0 → now at slot 4 (new Decorative Future)
-	# Old slots 1-4 → now at slots 0-3
-	# Old slot 5 → still at slot 5
-	
-	# The panel at slot 0 moved to slot 4, so we need to reorder the array
-	var first_panel = timeline_panels[0]  # This panel is now at slot 4
-	
-	# Rotate: remove first, append to position 4
-	timeline_panels.remove_at(0)
-	timeline_panels.insert(4, first_panel)  # Insert at slot 4, not at end!
-	
-	# Add new null placeholder at slot 5
-	if timeline_panels.size() == 5:
-		timeline_panels.append(TimelinePanel.new(null, "decorative", 5))
-	
-	# Update slot indices
-	for i in range(timeline_panels.size()):
-		timeline_panels[i].slot_index = i
-	
-	print("✅ Timeline panels rotated!")
 
 func update_after_carousel_slide(snapshot_present_state: Dictionary):
 	"""Update timeline types and states after carousel slide"""
@@ -681,15 +697,25 @@ func animate_panel_colors(tween: Tween, panel: Panel, new_type: String):
 		return
 	
 	if new_type == "past":
+		# Brown colors
 		var past_bg = Color(0.23921569, 0.14901961, 0.078431375, 1)
 		var past_border = Color(0.54509807, 0.43529412, 0.2784314, 1)
 		tween.tween_property(stylebox, "bg_color", past_bg, 1.0)
 		tween.tween_property(stylebox, "border_color", past_border, 1.0)
+	
 	elif new_type == "present":
+		# Blue colors
 		var present_bg = Color(0.11764706, 0.22745098, 0.37254903, 1)
 		var present_border = Color(0.2901961, 0.61960787, 1, 1)
 		tween.tween_property(stylebox, "bg_color", present_bg, 1.0)
 		tween.tween_property(stylebox, "border_color", present_border, 1.0)
+	
+	elif new_type == "future":
+		# Purple colors (NEW!)
+		var future_bg = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		var future_border = Color(0.7058824, 0.47843137, 1, 1)
+		tween.tween_property(stylebox, "bg_color", future_bg, 1.0)
+		tween.tween_property(stylebox, "border_color", future_border, 1.0)
 
 func update_panel_labels():
 	"""Update panel label text to match timeline types"""
@@ -855,18 +881,22 @@ func calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 	return future
 
 func rotate_timeline_panels_7():
-	"""Rotate 7-panel carousel array"""
-	print("🔄 Rotating 7-panel carousel...")
+	"""Rotate 6-panel carousel"""
+	print("🔄 Rotating carousel...")
 	
-	# Clear slot 0 (going to void)
-	timeline_panels[0].clear_all()
+	var old_slot_0 = timeline_panels[0]
+	old_slot_0.clear_all()
 	
-	# Rotate: remove first, append at end as new void placeholder
-	timeline_panels.remove_at(0)
-	timeline_panels.append(TimelinePanel.new(null, "void", 6))
+	timeline_panels.remove_at(0)  # Now we have 5 elements
+	timeline_panels.append(old_slot_0)  # Add back at end - now we have 6 again!
 	
-	# Update slot indices
+	old_slot_0.timeline_type = "decorative"
+	old_slot_0.slot_index = 5
+	
+	if old_slot_0.panel_node != null:
+		apply_carousel_position(old_slot_0.panel_node, 5)
+	
 	for i in range(timeline_panels.size()):
 		timeline_panels[i].slot_index = i
 	
-	print("✅ 7-panel carousel rotated!")
+	print("✅ Rotated! Array size: ", timeline_panels.size())
