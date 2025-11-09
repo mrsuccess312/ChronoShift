@@ -39,47 +39,42 @@ var carousel_states = []  # Which state each panel represents
 # Carousel position definitions (slot 0 = far-left, slot 2 = center/present)
 # ALL panels are 750x750 base size (using scale for perspective, not size changes)
 var carousel_positions = [
-	# Slot 0: Far-left decorative (same as before)
+	# Slot 0: Far-left decorative
 	{
-		"position": Vector2(50, 200),
-		"scale": Vector2(0.4, 0.4),
+		"position": Vector2(0, 150),  # Match scene: offset_left=0, offset_top=150
+		"scale": Vector2(0.6, 0.6),   # Match scene scale
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 0
 	},
-	# Slot 1: Past (same as before)
+	# Slot 1: Past
 	{
-		"position": Vector2(200, 150),
-		"scale": Vector2(0.75, 0.75),
+		"position": Vector2(135, 125),  # Match scene: offset_left=135, offset_top=125
+		"scale": Vector2(0.75, 0.75),   # Match scene scale
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 1
 	},
-	# Slot 2: Present (same as before)
+	# Slot 2: Present
 	{
-		"position": Vector2(585, 90),
+		"position": Vector2(660, 90),  # Match scene: offset_left=660, offset_top=90
 		"scale": Vector2(1.0, 1.0),
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 2
 	},
-	# Slot 3: Future - MIRROR of Past
-	# Past is 200, Present center is ~960
-	# Mirror: 960 + (960 - 200) = 960 + 760 = 1720
-	# BUT let's use visual balance: 1270 looks right
+	# Slot 3: Future
 	{
-		"position": Vector2(1158, 150),
-		"scale": Vector2(0.75, 0.75),
+		"position": Vector2(1185, 125),  # Match scene: offset_left=1185, offset_top=125
+		"scale": Vector2(0.75, 0.75),    # Match scene scale
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 1
 	},
-	# Slot 4: Far-right decorative - MIRROR of Decorative Past
-	# Decorative Past is 50, Past is 200 (difference = 150)
-	# So Decorative Future = Future + 150 = 1270 + 150 = 1420
+	# Slot 4: Far-right decorative
 	{
-		"position": Vector2(1570, 200),
-		"scale": Vector2(0.4, 0.4),
+		"position": Vector2(1320, 150),  # Match scene: offset_left=1320, offset_top=150
+		"scale": Vector2(0.6, 0.6),      # Match scene scale
 		"modulate": Color(1.0, 1.0, 1.0, 1.0),
 		"z_index": 0
 	},
-	# Slot 5: Hidden off-screen (same as before)
+	# Slot 5: Hidden off-screen right
 	{
 		"position": Vector2(2000, 250),
 		"scale": Vector2(0.2, 0.2),
@@ -184,8 +179,8 @@ func build_carousel_snapshot():
 
 func get_size_for_slot(slot_index: int) -> Vector2:
 	"""Return the appropriate panel size for a given slot"""
-	# ALL slots use the same base size - only scale differs!
-	return Vector2(750, 750)
+	# All panels are 600x750 in the scene file
+	return Vector2(600, 750)
 
 func get_timeline_for_slot(slot_index: int) -> String:
 	"""Return the timeline type for a given slot"""
@@ -210,7 +205,7 @@ func apply_carousel_position(panel: Panel, slot_index: int):
 	panel.scale = pos_data["scale"]
 	panel.modulate = pos_data["modulate"]
 	
-	# CRITICAL FIX: Use z_as_relative = false and set explicit z_index
+	# Set z-index
 	panel.z_as_relative = false
 	panel.z_index = pos_data["z_index"]
 	
@@ -221,8 +216,8 @@ func apply_carousel_position(panel: Panel, slot_index: int):
 		if slot_index == 2:  # Present - draw last (on top)
 			parent.move_child(panel, parent.get_child_count() - 1)
 	
-	# ALL PANELS ARE 750x750 - perspective comes from SCALE only
-	panel.size = Vector2(750, 750)
+	# REMOVED: panel.size = Vector2(600, 750)
+	# Let the scene file control the size! ✅
 
 func initialize_game():
 	# Set up initial game state
@@ -254,28 +249,38 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 	"""Create visual entity nodes for a timeline"""
 	print("\n=== Creating entities for timeline: ", timeline_name, " ===")
 	
-	# Clear existing entities
+	# Clear existing entities from ARRAY
 	for old_entity in entity_array:
 		old_entity.queue_free()
 	entity_array.clear()
 	
-	# Get the appropriate panel based on carousel state
+	# Get the appropriate panel
 	var panel = get_panel_for_timeline(timeline_name)
 	
 	if panel == null:
 		print("ERROR: Could not find panel for ", timeline_name)
 		return
 	
-	# CRITICAL: All panels are 750x750, so use STANDARD dimensions for centering
-	var standard_width = 750.0
+	# CRITICAL FIX: Also clear the panel itself!
+	# Remove any old entity nodes that might still be in the panel
+	print("🧹 Clearing panel ", panel.name, " of old entities...")
+	for child in panel.get_children():
+		# Keep labels, remove entities and arrows
+		if child is Node2D and "Label" not in child.name:
+			if child not in entity_array:  # Don't remove entities we're about to add
+				print("  Removing old node: ", child.name)
+				child.queue_free()
+	
+	# Use 600x750 dimensions for entity positioning
+	var standard_width = 600.0   # Changed from 750.0
 	var standard_height = 750.0
-	var center_x = standard_width / 2
+	var center_x = 300.0  # Half of 600 (changed from 375)
 	
 	# Create enemy entities in semicircle formation at top
 	if state_data.has("enemies"):
 		var enemy_count = state_data["enemies"].size()
 		
-		# Semicircle parameters (using standard dimensions)
+		# Semicircle parameters
 		var arc_center_x = center_x
 		var arc_center_y = standard_height * 0.33
 		var arc_radius = standard_width * 0.2
@@ -283,8 +288,6 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 		
 		for i in range(enemy_count):
 			var enemy_entity = ENTITY_SCENE.instantiate()
-			
-			# CRITICAL: Call setup() BEFORE add_child()
 			enemy_entity.setup(state_data["enemies"][i], false, timeline_name)
 			
 			# Calculate angle for this enemy
@@ -297,22 +300,14 @@ func create_entity_visuals(timeline_name: String, state_data: Dictionary, entity
 			var pos_y = arc_center_y - arc_radius * cos(angle_offset)
 			
 			enemy_entity.position = Vector2(pos_x, pos_y)
-			
-			# Now add to scene tree
 			panel.add_child(enemy_entity)
 			entity_array.append(enemy_entity)
 	
 	# Create player entity at bottom center
 	if state_data.has("player"):
 		var player_entity = ENTITY_SCENE.instantiate()
-		
-		# CRITICAL: Call setup() BEFORE add_child()
 		player_entity.setup(state_data["player"], true, timeline_name)
-		
-		# Position player at bottom center (using standard dimensions)
 		player_entity.position = Vector2(center_x, standard_height * 0.8)
-		
-		# Now add to scene tree
 		panel.add_child(player_entity)
 		entity_array.append(player_entity)
 	
@@ -540,7 +535,7 @@ func _on_play_button_pressed():
 	print("PLAY button pressed! Testing slot 0 animation...")
 	
 	# TEMPORARY: Test slot 0 animation
-	test_slot_0_and_1_animation()
+	test_slot_0_1_2_3_animation()
 	
 	# TODO: Re-enable this after testing
 	# Hide arrows before animations
@@ -898,59 +893,441 @@ func animate_slot_0_to_void(tween: Tween, panel: Panel):
 # ===== TEST FUNCTION for Slot 0 =====
 # Add this temporary test function to test just slot 0 animation
 
-func test_slot_0_and_1_animation():
-	"""TEST: Animate slot 0 and slot 1 together"""
-	print("\n🧪 TESTING SLOT 0 + SLOT 1 ANIMATION (Uniform size)...")
+func test_slot_0_1_2_3_animation():
+	"""Complete carousel with clean arrow management"""
+	print("\n🧪 TESTING with clean arrow recreation...")
 	
-	# Fade out entities first
-	fade_out_all_entities()
+	# STEP 1: Take snapshots
+	var snapshot_present_state = present_state.duplicate(true)
+	var snapshot_future_state = future_state.duplicate(true)
 	
-	# Create parallel tween (both animate simultaneously)
+	# STEP 2: Hide and DELETE ALL arrows
+	print("🗑️ Deleting ALL arrows...")
+	for arrow in present_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.queue_free()
+	for arrow in future_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.queue_free()
+	present_arrows.clear()
+	future_arrows.clear()
+	print("✅ All arrows deleted!")
+	
+	# STEP 3: Hide HP and damage labels
+	hide_ui_elements_for_animation()
+	
+	# STEP 4: Update Future entities to match Present formation
+	update_future_entities_to_present_formation(snapshot_present_state)
+	
+	# STEP 5: Instant z-index swap
+	carousel_panels[2].z_index = 1
+	carousel_panels[3].z_index = 2
+	
+	# STEP 6: Panel animations
 	var tween = create_tween()
 	tween.set_parallel(true)
 	
-	# Animate slot 0 (decorative → void)
 	animate_slot_0_to_void(tween, carousel_panels[0])
-	
-	# Animate slot 1 (past → decorative past position)
 	animate_slot_to_snapshot(tween, carousel_panels[1], carousel_snapshot[0])
+	animate_slot_to_snapshot(tween, carousel_panels[2], carousel_snapshot[1])
+	animate_slot_to_snapshot(tween, carousel_panels[3], carousel_snapshot[2])
 	
-	# CRITICAL: Wait for animation to complete
+	# Color animations
+	var present_stylebox = carousel_panels[2].get_theme_stylebox("panel")
+	if present_stylebox is StyleBoxFlat:
+		var past_bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		var past_border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		tween.tween_property(present_stylebox, "bg_color", past_bg_color, 1.0)
+		tween.tween_property(present_stylebox, "border_color", past_border_color, 1.0)
+	
+	var future_stylebox = carousel_panels[3].get_theme_stylebox("panel")
+	if future_stylebox is StyleBoxFlat:
+		var present_bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+		var present_border_color = Color(0.2901961, 0.61960787, 1, 1)
+		tween.tween_property(future_stylebox, "bg_color", present_bg_color, 1.0)
+		tween.tween_property(future_stylebox, "border_color", present_border_color, 1.0)
+	
+	# STEP 7: Wait for animation
 	await tween.finished
+	print("✅ Panel animations complete!")
 	
-	# NO SIZE UPDATE NEEDED - already 750x750!
+	# STEP 8: Swap entity arrays
+	print("\n🔄 Swapping entity arrays...")
+	var temp_present = present_entities
+	var temp_future = future_entities
 	
-	print("✅ Slot 0 + 1 animation complete! (No size snap!)")
+	past_entities = temp_present
+	present_entities = temp_future
+	print("✅ Entity arrays swapped!")
 	
-	# Fade entities back in
-	fade_in_all_entities()
+	# STEP 9: Update timeline_type
+	update_timeline_types_after_slide()
+	
+	# STEP 10: Update game states
+	past_state = snapshot_present_state.duplicate(true)
+	present_state = snapshot_present_state.duplicate(true)
+	
+	# STEP 11: Update entity data
+	update_entity_data_no_display(past_entities, snapshot_present_state)
+	update_entity_data_no_display(present_entities, snapshot_present_state)
+	
+	# STEP 12: Calculate Future and recreate Future entities
+	calculate_future()
+	create_entity_visuals("future", future_state, future_entities)
+	
+	# STEP 13: Show labels
+	show_ui_elements_after_animation()
+	
+	# STEP 14: Update display (now that labels are visible)
+	print("🎨 Updating displays...")
+	for entity in past_entities:
+		if entity and is_instance_valid(entity):
+			entity.update_display()
+	for entity in present_entities:
+		if entity and is_instance_valid(entity):
+			entity.update_display()
+	
+	# STEP 15: RECREATE ALL ARROWS FROM SCRATCH
+	print("🏹 Recreating ALL arrows from scratch...")
+	
+	# Past: NO arrows (timeline_type = "past")
+	# (past_arrows already empty)
+	
+	# Present: player → enemy arrows (timeline_type = "present")
+	var present_panel = get_panel_for_timeline("present")
+	if present_panel and present_state.get("enemies", []).size() > 0:
+		create_player_attack_arrow(present_panel, present_entities, present_arrows)
+		print("  ✅ Created Present arrows (player → enemy)")
+	
+	# Future: enemy → player arrows (timeline_type = "future")  
+	var future_panel = get_panel_for_timeline("future")
+	if future_panel and future_state.get("enemies", []).size() > 0:
+		create_enemy_attack_arrows(future_panel, future_entities, future_arrows)
+		print("  ✅ Created Future arrows (enemy → player)")
+	
+	print("✅ All arrows recreated based on timeline_type!")
+	
+	# STEP 16: Update panel labels
+	update_panel_labels_after_slide()
+	
+	print("✅ Complete carousel finished!")
+	
+func update_entity_data_without_recreating(entity_array: Array, new_state: Dictionary):
+	"""Update entity HP/damage data without recreating the visual nodes"""
+	print("📊 Updating entity data for existing visuals...")
+	
+	# Update player
+	for entity in entity_array:
+		if entity and is_instance_valid(entity) and entity.is_player:
+			print("  Updating player: HP ", entity.entity_data.get("hp"), " → ", new_state["player"]["hp"])
+			entity.entity_data = new_state["player"].duplicate(true)
+			entity.update_display()
+			print("    Called update_display()")
+			break
+	
+	# Update enemies
+	var enemy_index = 0
+	for entity in entity_array:
+		if entity and is_instance_valid(entity) and not entity.is_player:
+			if enemy_index < new_state["enemies"].size():
+				var old_hp = entity.entity_data.get("hp")
+				var new_hp = new_state["enemies"][enemy_index]["hp"]
+				print("  Updating enemy ", enemy_index, ": HP ", old_hp, " → ", new_hp)
+				
+				entity.entity_data = new_state["enemies"][enemy_index].duplicate(true)
+				entity.update_display()
+				print("    Called update_display()")
+				
+				enemy_index += 1
 
-func fade_out_all_entities():
-	"""Hide all entity HP/damage labels before carousel slide"""
-	print("👻 Fading out entities...")
+func update_future_entities_to_present_formation(snapshot_present: Dictionary):
+	"""Update Future entities to match Present formation (add missing entities)"""
+	print("🔄 Updating Future entities to match Present formation...")
+	
+	var present_enemy_count = snapshot_present.get("enemies", []).size()
+	var future_enemy_count = future_state.get("enemies", []).size()
+	
+	# If Future has fewer enemies, we need to add them back visually
+	if future_enemy_count < present_enemy_count:
+		print("⚠️ Future has fewer enemies (", future_enemy_count, " vs ", present_enemy_count, ")")
+		print("   Recreating Future entities to match Present formation...")
+		
+		# Temporarily use Present enemy data for Future visuals
+		var temp_future_state = future_state.duplicate(true)
+		temp_future_state["enemies"] = snapshot_present["enemies"].duplicate(true)
+		
+		# Recreate Future entities with Present formation
+		create_entity_visuals("future", temp_future_state, future_entities)
+		
+		# Update the entity data to show correct HP (will be from Present snapshot)
+		for i in range(future_entities.size()):
+			if not future_entities[i].is_player and i < snapshot_present["enemies"].size():
+				future_entities[i].entity_data = snapshot_present["enemies"][i].duplicate(true)
+				future_entities[i].update_display()
+
+func hide_ui_elements_for_animation():
+	"""Hide only HP and damage labels"""
+	print("👻 Hiding HP and damage labels...")
+	
+	var all_entities = past_entities + present_entities + future_entities
+	for entity in all_entities:
+		if entity and is_instance_valid(entity):
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = false
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = false
+	
+	print("✅ Labels hidden")
+
+func update_timeline_types_after_slide():
+	"""Update timeline_type on all entities after carousel slide"""
+	print("🔄 Updating timeline_type on entities...")
+	
+	# Past entities (were Present): timeline_type = "past"
+	for entity in past_entities:
+		if entity and is_instance_valid(entity):
+			entity.timeline_type = "past"
+			# FORCE hide damage label if it's an enemy
+			if not entity.is_player and entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = false
+			print("  - ", entity.entity_data.get("name", "Entity"), " → past (damage hidden)")
+	
+	# Present entities (were Future): timeline_type = "present"
+	for entity in present_entities:
+		if entity and is_instance_valid(entity):
+			entity.timeline_type = "present"
+			# FORCE show damage label if it's an enemy
+			if not entity.is_player and entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = true
+			print("  - ", entity.entity_data.get("name", "Entity"), " → present (damage visible)")
+	
+	# Future entities stay "future"
+	for entity in future_entities:
+		if entity and is_instance_valid(entity):
+			# Should already be "future" from create_entity_visuals()
+			if not entity.is_player and entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = false
+			print("  - ", entity.entity_data.get("name", "Entity"), " → future (damage hidden)")
+	
+	print("✅ Timeline types updated with forced damage visibility!")
+
+
+func recreate_arrows_after_slide():
+	"""Recreate ONLY Present arrows (player→enemy)"""
+	print("🏹 Recreating Present arrows only...")
+	
+	# Present arrows should already be cleared in step 7
+	# But clear again just to be safe
+	for arrow in present_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.queue_free()
+	present_arrows.clear()
+	
+	# Create new Present arrows (player → enemy)
+	var present_panel = get_panel_for_timeline("present")
+	if present_panel and present_state.get("enemies", []).size() > 0:
+		create_player_attack_arrow(present_panel, present_entities, present_arrows)
+		print("✅ Created player→enemy arrow for Present")
+	
+	# Past has NO arrows (don't create any!)
+	# Future arrows were already created in step 12
+	
+	print("✅ Arrows recreated!")
+
+
+func show_ui_elements_after_animation():
+	"""Show UI elements with correct visibility rules for each timeline"""
+	print("✨ Showing UI elements with timeline-specific rules...")
+	
+	# === PAST (was Present) ===
+	for entity in past_entities:
+		if entity and is_instance_valid(entity):
+			# Show HP labels
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true
+			
+			# CRITICAL: Force damage labels HIDDEN in Past
+			if entity.has_node("DamageLabel") and not entity.is_player:
+				var damage_label = entity.get_node("DamageLabel")
+				damage_label.visible = false
+				# The entity's _process() will handle hover behavior now that timeline_type = "past"
+	
+	# NO ARROWS in Past
+	
+	# === PRESENT (was Future) ===
+	for entity in present_entities:
+		if entity and is_instance_valid(entity):
+			# Show HP labels
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true
+			
+			# CRITICAL: Force damage labels VISIBLE for Present enemies
+			if entity.has_node("DamageLabel") and not entity.is_player:
+				var damage_label = entity.get_node("DamageLabel")
+				damage_label.visible = true
+				# Note: entity.gd _process() returns early for Present, so labels stay visible
+	
+	# Show Present arrows (player → enemy)
+	for arrow in present_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = true
+			arrow.show_arrow()
+	
+	# === FUTURE ===
+	for entity in future_entities:
+		if entity and is_instance_valid(entity):
+			# Show HP labels
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true
+			
+			# CRITICAL: Force damage labels HIDDEN in Future
+			if entity.has_node("DamageLabel") and not entity.is_player:
+				var damage_label = entity.get_node("DamageLabel")
+				damage_label.visible = false
+				# The entity's _process() will handle hover behavior now that timeline_type = "future"
+	
+	# Show Future arrows (enemies → player)
+	for arrow in future_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = true
+			arrow.show_arrow()
+	
+	print("✅ UI elements shown with correct timeline rules!")
+
+
+func hide_all_entities_completely():
+	"""Hide ALL entities (sprites, HP, damage) during carousel animation"""
+	print("👻 Hiding all entities completely...")
 	
 	var all_entities = past_entities + present_entities + future_entities
 	
 	for entity in all_entities:
 		if entity and is_instance_valid(entity):
-			# Fade out HP and damage labels
+			# Hide the entire entity (sprite + labels)
+			entity.visible = false
+
+
+func show_arrows_and_damage_labels_for_present():
+	"""Show arrows and damage labels after carousel animation"""
+	print("✨ Showing arrows and damage labels for new Present...")
+	
+	# Show present arrows (player → enemy)
+	for arrow in present_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = true
+			arrow.show_arrow()
+	
+	# Show future arrows (enemies → player)
+	for arrow in future_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = true
+			arrow.show_arrow()
+	
+	# Show damage labels ONLY for Present timeline entities
+	for entity in present_entities:
+		if entity and is_instance_valid(entity) and not entity.is_player:
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = true
+
+func hide_arrows_and_damage_labels():
+	"""Hide arrows and damage labels before carousel animation"""
+	print("👻 Hiding arrows and damage labels...")
+	
+	# Hide all present arrows
+	for arrow in present_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = false
+	
+	# Hide all future arrows
+	for arrow in future_arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = false
+	
+	# Hide damage labels on all entities
+	var all_entities = past_entities + present_entities + future_entities
+	for entity in all_entities:
+		if entity and is_instance_valid(entity):
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = false
+
+
+func fade_out_hp_labels():
+	"""Fade out only HP labels (not damage labels)"""
+	print("👻 Fading out HP labels...")
+	
+	var all_entities = past_entities + present_entities + future_entities
+	for entity in all_entities:
+		if entity and is_instance_valid(entity):
 			if entity.has_node("HPLabel"):
 				entity.get_node("HPLabel").modulate.a = 0.0
-			if entity.has_node("DamageLabel"):
-				entity.get_node("DamageLabel").modulate.a = 0.0
 
-func fade_in_all_entities():
-	"""Show all entity HP/damage labels after carousel slide"""
-	print("✨ Fading in entities...")
+
+func fade_in_hp_labels():
+	"""Fade in HP labels after animation"""
+	print("✨ Fading in HP labels...")
 	
 	var all_entities = past_entities + present_entities + future_entities
-	
 	for entity in all_entities:
 		if entity and is_instance_valid(entity):
-			# Fade in HP and damage labels
 			if entity.has_node("HPLabel"):
 				entity.get_node("HPLabel").modulate.a = 1.0
-			if entity.has_node("DamageLabel"):
-				entity.get_node("DamageLabel").modulate.a = 1.0
 
-	print("✅ Foundation ready! Data structures and fade helpers created")
+func update_panel_labels_after_slide():
+	"""Update the text labels inside panels to match their new timeline positions"""
+	print("🏷️ Updating panel labels...")
+	
+	# After carousel slide:
+	# - carousel_panels[1] (was Past) → now Decorative Past
+	# - carousel_panels[2] (was Present) → now Past
+	# - carousel_panels[3] (was Future) → now Present
+	
+	# Update the panel that's now in Past position (was Present)
+	var new_past_panel = carousel_panels[2]
+	if new_past_panel and new_past_panel.has_node("PresentLabel"):
+		var label = new_past_panel.get_node("PresentLabel")
+		label.text = "⟲ PAST"
+		print("  Updated past panel label")
+	
+	# Update the panel that's now in Present position (was Future)  
+	var new_present_panel = carousel_panels[3]
+	if new_present_panel and new_present_panel.has_node("FutureLabel"):
+		var label = new_present_panel.get_node("FutureLabel")
+		label.text = "◉ PRESENT"
+		print("  Updated present panel label")
+	
+	# The new Future panel will be created in step 12, so its label is already correct
+	
+	print("✅ Panel labels updated!")
+
+func debug_panel_children(panel_name: String):
+	"""Debug helper to see what nodes are in a panel"""
+	var panel = get_panel_for_timeline(panel_name)
+	if panel:
+		print("\n🔍 DEBUG: Children of ", panel_name, " panel:")
+		for child in panel.get_children():
+			print("  - ", child.name, " (", child.get_class(), ")")
+			if child is Node2D:
+				print("    Position: ", child.position)
+				if child.has_node("HPLabel"):
+					print("    HP Label: ", child.get_node("HPLabel").text)
+		print()
+
+func update_entity_data_no_display(entity_array: Array, new_state: Dictionary):
+	"""Update entity data WITHOUT calling update_display()"""
+	print("📊 Updating entity internal data...")
+	
+	# Update player
+	for entity in entity_array:
+		if entity and is_instance_valid(entity) and entity.is_player:
+			entity.entity_data = new_state["player"].duplicate(true)
+			print("  Player data updated: HP=", entity.entity_data.get("hp"))
+			break
+	
+	# Update enemies
+	var enemy_index = 0
+	for entity in entity_array:
+		if entity and is_instance_valid(entity) and not entity.is_player:
+			if enemy_index < new_state["enemies"].size():
+				entity.entity_data = new_state["enemies"][enemy_index].duplicate(true)
+				print("  Enemy ", enemy_index, " data updated: HP=", entity.entity_data.get("hp"))
+				enemy_index += 1
