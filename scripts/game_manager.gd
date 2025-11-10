@@ -58,6 +58,8 @@ var shake_decay = 5.0
 # ===== CAROUSEL SYSTEM =====
 var timeline_panels: Array[TimelinePanel] = []  # 6 TimelinePanel objects
 
+var is_first_turn = true
+
 # Carousel position definitions (slot 0 = far-left, slot 2 = center/present)
 var carousel_positions = [
 	# Slot 0: Far-left decorative
@@ -469,149 +471,54 @@ func calculate_future_state():
 	
 	print("Future calculated: Player will have ", future_tp.state["player"]["hp"], " HP")
 
-
-# ===== CAROUSEL ANIMATION =====
-
-func carousel_slide_animation():
-	"""Execute elegant 7-panel carousel slide"""
-	print("\n🎠 Starting 7-panel carousel slide...")
-	print("  Panel array size: ", timeline_panels.size())
-	
-	# Verify all panels exist
-	for i in range(timeline_panels.size()):
-		var tp = timeline_panels[i]
-		if tp.panel_node == null:
-			print("  ⚠️ WARNING: Panel ", i, " is NULL!")
-		else:
-			print("  ✓ Panel ", i, " exists (", tp.timeline_type, ")")
-	
-	# STEP 1: Snapshots
-	var present_tp = get_timeline_panel("present")
-	var snapshot_present_state = present_tp.state.duplicate(true)
-	
-	# STEP 2: Hide UI and delete arrows
-	hide_ui_for_carousel()
-	delete_all_arrows()
-	
-	# STEP 3: Get panels BY SLOT INDEX (safer than by timeline_type)
-	# After rotations, timeline_type might not match slot position!
-	var slot_2_tp = timeline_panels[2]  # Present
-	var slot_3_tp = timeline_panels[3]  # Future
-	var slot_4_tp = timeline_panels[4]  # Decorative Future
-	var slot_5_tp = timeline_panels[5]  # Intermediate
-	
-	# Update Future entities to match Present formation
-	if slot_3_tp.state.get("enemies", []).size() < slot_2_tp.state.get("enemies", []).size():
-		slot_3_tp.state["enemies"] = snapshot_present_state["enemies"].duplicate(true)
-		create_timeline_entities(slot_3_tp)
-	
-	# STEP 4: Prepare new Future in slot 4 (Decorative Future position)
-	var new_future_state = calculate_future_from_state(snapshot_present_state)
-	slot_4_tp.timeline_type = "future"
-	slot_4_tp.state = new_future_state
-	create_timeline_entities(slot_4_tp)
-	
-	# STEP 5: Prepare Intermediate (slot 5)
-	var future_plus_one_state = calculate_future_from_state(new_future_state)
-	slot_5_tp.timeline_type = "decorative"
-	slot_5_tp.state = future_plus_one_state
-	create_timeline_entities(slot_5_tp)
-	print("✅ Intermediate panel prepared")
-	
-	# STEP 6: Duplicate StyleBoxes (use slot indices!)
-	var present_stylebox = slot_2_tp.panel_node.get_theme_stylebox("panel").duplicate()
-	slot_2_tp.panel_node.add_theme_stylebox_override("panel", present_stylebox)
-	
-	var future_stylebox = slot_3_tp.panel_node.get_theme_stylebox("panel").duplicate()
-	slot_3_tp.panel_node.add_theme_stylebox_override("panel", future_stylebox)
-	
-	# STEP 7: Z-index management - ADD NULL CHECKS
-	if timeline_panels[0].panel_node != null:
-		timeline_panels[0].panel_node.z_index = 0   # Decorative Past
-	
-	if timeline_panels[1].panel_node != null:
-		timeline_panels[1].panel_node.z_index = 1   # Past
-	
-	if slot_2_tp.panel_node != null:
-		slot_2_tp.panel_node.z_index = 2            # Present
-	
-	if slot_3_tp.panel_node != null:
-		slot_3_tp.panel_node.z_index = 1            # Future
-	
-	if slot_4_tp.panel_node != null:
-		slot_4_tp.panel_node.z_index = 0            # Decorative Future
-	
-	if slot_5_tp.panel_node != null:
-		slot_5_tp.panel_node.z_index = -1           # Intermediate
-	else:
-		print("  ⚠️ ERROR: slot_5_tp.panel_node is NULL at line 512!")
-	
-	# STEP 8: Animate ALL 6 panels
-	var tween = create_tween()
-	tween.set_parallel(true)
-	
-	animate_slot_to_void(tween, timeline_panels[0].panel_node)
-	animate_slot_to_snapshot(tween, timeline_panels[1].panel_node, carousel_snapshot[0])
-	animate_slot_to_snapshot(tween, slot_2_tp.panel_node, carousel_snapshot[1])
-	animate_slot_to_snapshot(tween, slot_3_tp.panel_node, carousel_snapshot[2])
-	animate_slot_to_snapshot(tween, slot_4_tp.panel_node, carousel_snapshot[3])
-	animate_slot_to_snapshot(tween, slot_5_tp.panel_node, carousel_snapshot[4])
-	
-	# Color animations (on the panels that are changing timeline_type)
-	animate_panel_colors(tween, slot_2_tp.panel_node, "past")     # Present → Past
-	animate_panel_colors(tween, slot_3_tp.panel_node, "present")  # Future → Present
-	animate_panel_colors(tween, timeline_panels[0].panel_node, "future")
-
-	await tween.finished
-	print("✅ Panel animations complete!")
-	
-	# STEP 9: Rotate panels
-	rotate_timeline_panels_7()
-	
-	# STEP 10: Update states
-	update_after_carousel_slide(snapshot_present_state)
-	
-	# STEP 11: Recreate displays
-	update_all_timeline_displays()
-	
-	# STEP 12: Update labels
-	update_panel_labels()
-	
-	print("✅ Carousel slide complete!")
-
-func update_after_carousel_slide(snapshot_present_state: Dictionary):
+func update_after_carousel_slide_correct(state_for_past: Dictionary, first_turn: bool):
 	"""Update timeline types and states after carousel slide"""
 	print("🔄 Updating timeline types and states...")
-	
-	# After rotation:
-	# - timeline_panels[0] (was slot 1) → Decorative Past
-	# - timeline_panels[1] (was slot 2) → Past
-	# - timeline_panels[2] (was slot 3) → Present
-	# - timeline_panels[3] (was slot 4) → Future
-	# - timeline_panels[4] (was slot 5) → Decorative Future ✨
-	# - timeline_panels[5] (new null) → void placeholder
 	
 	# Update timeline types
 	timeline_panels[0].timeline_type = "decorative"
 	timeline_panels[1].timeline_type = "past"
 	timeline_panels[2].timeline_type = "present"
 	timeline_panels[3].timeline_type = "future"
-	timeline_panels[4].timeline_type = "decorative"  # This is now Decorative Future!
+	timeline_panels[4].timeline_type = "decorative"
 	
-	# Update states
-	timeline_panels[1].state = snapshot_present_state.duplicate(true)
-	timeline_panels[2].state = snapshot_present_state.duplicate(true)
-	# timeline_panels[3] and [4] already have correct states
+	# Update Past with captured state
+	timeline_panels[1].state = state_for_past.duplicate(true)
 	
-	# Update timeline_type on entities
-	for i in range(5):  # Only first 5 panels (skip void placeholder)
+	# CRITICAL FIX: ALWAYS restore Present to the pre-combat state
+	# state_for_past contains the HP values BEFORE combat was calculated
+	# This ensures combat animation starts from correct HP values
+	timeline_panels[2].state = state_for_past.duplicate(true)
+	print("  ✅ Present RESTORED to pre-combat state from previous Present")
+	
+	# Recreate entities with correct HP values
+	create_timeline_entities(timeline_panels[2])
+	
+	# Update entity timeline_types
+	for i in range(5):
 		var tp = timeline_panels[i]
 		for entity in tp.entities:
 			if entity and is_instance_valid(entity):
-				# Set timeline_type based on panel's timeline_type
 				match tp.timeline_type:
 					"decorative":
-						entity.timeline_type = "future"  # Decorative panels show future-style
+						entity.timeline_type = "future"
+					"past":
+						entity.timeline_type = "past"
+					"present":
+						entity.timeline_type = "present"
+					"future":
+						entity.timeline_type = "future"
+	
+	print("✅ Timeline types and states updated!")
+	
+	# Update entity timeline_types
+	for i in range(5):
+		var tp = timeline_panels[i]
+		for entity in tp.entities:
+			if entity and is_instance_valid(entity):
+				match tp.timeline_type:
+					"decorative":
+						entity.timeline_type = "future"
 					"past":
 						entity.timeline_type = "past"
 					"present":
@@ -839,8 +746,19 @@ func apply_card_effect(card_data: Dictionary):
 # ===== TURN EXECUTION =====
 
 func _on_play_button_pressed():
-	print("PLAY button pressed!")
-	carousel_slide_animation()
+	"""Execute complete turn: carousel slide → combat → future calculation"""
+	print("\n▶ PLAY button pressed - Starting complete turn sequence!")
+	
+	# Disable Play button during turn
+	play_button.disabled = true
+	
+	# Execute complete turn with combat
+	await execute_complete_turn()
+	
+	# Re-enable Play button
+	play_button.disabled = false
+	
+	print("✅ Turn complete - Ready for next turn!")
 
 func execute_turn():
 	"""Execute turn with combat animations (to be implemented)"""
@@ -900,3 +818,477 @@ func rotate_timeline_panels_7():
 		timeline_panels[i].slot_index = i
 	
 	print("✅ Rotated! Array size: ", timeline_panels.size())
+
+func execute_complete_turn():
+	"""Execute complete turn: slide → combat → recalculate"""
+	
+	# PHASE 1: Carousel slide animation
+	print("\n🎠 PHASE 1: Carousel slide animation")
+	await carousel_slide_animation_with_blanks()
+	
+	# CRITICAL: At this point, rotation is complete!
+	# - timeline_panels[2] is the NEW Present (was Future before slide)
+	# - Its state is what we should use for combat!
+	
+	# PHASE 2: Show HP/DMG on new Present AND Past
+	print("\n💚 PHASE 2: Show HP/DMG labels")
+	show_present_ui_labels()
+	
+	# PHASE 3: Combat animations (using NEW Present state)
+	print("\n⚔️ PHASE 3: Combat animations")
+	await execute_combat_animations()
+	
+	# PHASE 4: Recalculate Future and Decorative Future
+	print("\n🔮 PHASE 4: Recalculate Future timelines")
+	recalculate_future_timelines()
+	
+	# PHASE 5: Show arrows
+	print("\n🏹 PHASE 5: Show arrows")
+	show_timeline_arrows()
+	
+	print("✅ Complete turn executed!")
+
+func carousel_slide_animation_with_blanks():
+	"""Carousel slide with Decorative Future starting blank"""
+	print("\n🎠 Starting carousel slide (Decorative Future blank)...")
+	
+	hide_ui_for_carousel()
+	delete_all_arrows()
+	
+	var slot_2_tp = timeline_panels[2]  # Current Present
+	var slot_3_tp = timeline_panels[3]  # Current Future
+	var slot_4_tp = timeline_panels[4]
+	var slot_5_tp = timeline_panels[5]
+	
+	# CRITICAL FIX: ALWAYS capture current Present state for Past update
+	var state_for_past = slot_2_tp.state.duplicate(true)
+	
+	if is_first_turn:
+		print("  🔵 First turn - Past will get original Present state (full HP)")
+	else:
+		print("  🔄 Subsequent turn - Past will get current Present state (post-combat from last turn)")
+	
+	# Check if we need enemy revival animation
+	var old_enemy_count = slot_3_tp.state.get("enemies", []).size()
+	var new_enemy_count = slot_2_tp.state.get("enemies", []).size()
+	var needs_revival = new_enemy_count > old_enemy_count
+	
+	# Prepare enemy repositioning during slide
+	var enemy_repositioning_tween = null
+	if needs_revival:
+		print("  🔄 Preparing enemy repositioning: ", old_enemy_count, " → ", new_enemy_count)
+	
+	# Get current enemy entities in Future (before adding revived one)
+	var existing_enemies = []
+	for entity in slot_3_tp.entities:
+		if not entity.is_player:
+			existing_enemies.append(entity)
+	
+	# Update state to include revived enemy
+	slot_3_tp.state["enemies"] = slot_2_tp.state["enemies"].duplicate(true)
+	
+	# Create the revived enemy entity
+	var panel_center_x = 300.0
+	var panel_height = 750.0
+	var arc_center_y = panel_height * 0.33
+	var arc_radius = 120.0
+	var arc_span = PI * 0.6
+	
+	# Calculate position for revived enemy (it's the last one in the list)
+	var revived_index = new_enemy_count - 1
+	var revived_angle = 0
+	if new_enemy_count > 1:
+		revived_angle = (float(revived_index) / (new_enemy_count - 1) - 0.5) * arc_span
+	
+	var revived_pos_x = panel_center_x + arc_radius * sin(revived_angle)
+	var revived_pos_y = arc_center_y - arc_radius * cos(revived_angle)
+	
+	# Create revived enemy entity
+	var revived_enemy = ENTITY_SCENE.instantiate()
+	revived_enemy.setup(slot_3_tp.state["enemies"][revived_index], false, "future")
+	revived_enemy.position = Vector2(revived_pos_x, revived_pos_y)
+	revived_enemy.modulate.a = 0.0  # Start invisible
+	
+	# CRITICAL FIX: Hide HP/DMG labels on revived enemy (carousel slide in progress!)
+	if revived_enemy.has_node("HPLabel"):
+		revived_enemy.get_node("HPLabel").visible = false
+	if revived_enemy.has_node("DamageLabel"):
+		revived_enemy.get_node("DamageLabel").visible = false
+	
+	slot_3_tp.panel_node.add_child(revived_enemy)
+	slot_3_tp.entities.append(revived_enemy)
+	
+	# Create tween for enemy repositioning (runs in parallel with carousel slide)
+	enemy_repositioning_tween = create_tween()
+	enemy_repositioning_tween.set_parallel(true)
+	
+	# Fade in the revived enemy
+	enemy_repositioning_tween.tween_property(revived_enemy, "modulate:a", 1.0, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	
+	# Reposition existing enemies based on new count
+	for i in range(existing_enemies.size()):
+		var entity = existing_enemies[i]
+		
+		# CRITICAL FIX: Ensure HP/DMG labels stay hidden during repositioning
+		if entity.has_node("HPLabel"):
+			entity.get_node("HPLabel").visible = false
+		if entity.has_node("DamageLabel"):
+			entity.get_node("DamageLabel").visible = false
+		
+		# Calculate new position with new enemy count
+		var new_angle = 0
+		if new_enemy_count > 1:
+			new_angle = (float(i) / (new_enemy_count - 1) - 0.5) * arc_span
+		
+		var new_pos_x = panel_center_x + arc_radius * sin(new_angle)
+		var new_pos_y = arc_center_y - arc_radius * cos(new_angle)
+		var new_pos = Vector2(new_pos_x, new_pos_y)
+		
+		# Slide existing enemy to new position
+		enemy_repositioning_tween.tween_property(entity, "position", new_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	
+	# Duplicate StyleBoxes
+	var present_stylebox = slot_2_tp.panel_node.get_theme_stylebox("panel").duplicate()
+	slot_2_tp.panel_node.add_theme_stylebox_override("panel", present_stylebox)
+	
+	var future_stylebox = slot_3_tp.panel_node.get_theme_stylebox("panel").duplicate()
+	slot_3_tp.panel_node.add_theme_stylebox_override("panel", future_stylebox)
+	
+	var decorative_past_stylebox = timeline_panels[0].panel_node.get_theme_stylebox("panel").duplicate()
+	timeline_panels[0].panel_node.add_theme_stylebox_override("panel", decorative_past_stylebox)
+	
+	# Z-index
+	timeline_panels[0].panel_node.z_index = 0
+	timeline_panels[1].panel_node.z_index = 1
+	slot_2_tp.panel_node.z_index = 2
+	slot_3_tp.panel_node.z_index = 1
+	slot_4_tp.panel_node.z_index = 0
+	slot_5_tp.panel_node.z_index = -1
+	
+	# Animate carousel slide
+	var carousel_tween = create_tween()
+	carousel_tween.set_parallel(true)
+	
+	animate_slot_to_void(carousel_tween, timeline_panels[0].panel_node)
+	animate_slot_to_snapshot(carousel_tween, timeline_panels[1].panel_node, carousel_snapshot[0])
+	animate_slot_to_snapshot(carousel_tween, slot_2_tp.panel_node, carousel_snapshot[1])
+	animate_slot_to_snapshot(carousel_tween, slot_3_tp.panel_node, carousel_snapshot[2])
+	animate_slot_to_snapshot(carousel_tween, slot_4_tp.panel_node, carousel_snapshot[3])
+	animate_slot_to_snapshot(carousel_tween, slot_5_tp.panel_node, carousel_snapshot[4])
+	
+	# Colors
+	animate_panel_colors(carousel_tween, slot_2_tp.panel_node, "past")
+	animate_panel_colors(carousel_tween, slot_3_tp.panel_node, "present")
+	animate_panel_colors(carousel_tween, timeline_panels[0].panel_node, "future")
+	
+	# Both animations happen simultaneously
+	await carousel_tween.finished
+	
+	print("✅ Carousel slide complete!")
+	
+	# Rotate
+	rotate_timeline_panels_7()
+	
+	# Update with correct state
+	update_after_carousel_slide_correct(state_for_past, is_first_turn)
+	
+	update_panel_labels()
+	
+	# Mark first turn as complete
+	is_first_turn = false
+
+func show_present_ui_labels():
+	"""Show HP and DMG labels on the new Present timeline"""
+	var present_tp = timeline_panels[2]  # After rotation, slot 2 is Present
+	
+	for entity in present_tp.entities:
+		if entity and is_instance_valid(entity):
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true
+			if entity.has_node("DamageLabel") and not entity.is_player:
+				entity.get_node("DamageLabel").visible = true  # Present shows damage
+	
+	# CRITICAL FIX: Also show HP bars on Past (slot 1)
+	var past_tp = timeline_panels[1]  # After rotation, slot 1 is Past
+	for entity in past_tp.entities:
+		if entity and is_instance_valid(entity):
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true  # HP always visible
+			if entity.has_node("DamageLabel"):
+				entity.get_node("DamageLabel").visible = false  # Damage hidden (shows on hover)
+	
+	print("  ✅ HP/DMG labels shown on Present")
+	print("  ✅ HP labels shown on Past")
+
+func execute_combat_animations():
+	"""Execute combat on NEW Present (was Future)"""
+	var present_tp = timeline_panels[2]  # This is the NEW Present (was Future)
+	
+	# Check state
+	print("  Present state before combat:")
+	print("    Player HP: ", present_tp.state.get("player", {}).get("hp", 0))
+	print("    Enemies: ", present_tp.state.get("enemies", []).size())
+	
+	if present_tp.state.get("enemies", []).size() == 0:
+		print("  No enemies - skipping combat")
+		return
+	
+	# Track if any enemy died during combat
+	var enemies_before = present_tp.state.get("enemies", []).size()
+	
+	# Player attacks
+	print("  ⚔️ Player attacking...")
+	await animate_player_attack()
+	
+	await get_tree().create_timer(0.2).timeout
+	
+	# Check if enemy died
+	var enemies_after_player = present_tp.state.get("enemies", []).size()
+	var enemy_died_during_player_attack = enemies_after_player < enemies_before
+	
+	# Enemies attack (if any left)
+	if present_tp.state.get("enemies", []).size() > 0:
+		print("  ⚔️ Enemies attacking...")
+		await animate_enemy_attacks()
+	
+	print("  ✅ Combat complete!")
+	print("    Player HP after: ", present_tp.state.get("player", {}).get("hp", 0))
+	
+	# NOW reposition enemies if any died during combat
+	if enemy_died_during_player_attack:
+		print("  ↔️ Enemy died during combat - repositioning remaining enemies...")
+		await animate_enemy_repositioning_after_death(present_tp)
+
+func animate_player_attack() -> void:
+	"""Animate player attacking leftmost enemy in Present"""
+	var present_tp = timeline_panels[2]
+	
+	# Find player and target enemy
+	var player_entity = null
+	var target_enemy = null
+	
+	for entity in present_tp.entities:
+		if entity.is_player:
+			player_entity = entity
+		elif target_enemy == null:
+			target_enemy = entity
+	
+	if not player_entity or not target_enemy:
+		print("  Cannot animate - missing player or enemy")
+		return
+	
+	# Store original position
+	var original_pos = player_entity.position
+	var target_pos = target_enemy.position
+	
+	# Calculate attack position
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0
+	
+	print("  Player attack animation starting...")
+	
+	# Dash to enemy
+	var tween = create_tween()
+	tween.tween_property(player_entity, "position", attack_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await tween.finished
+	
+	# APPLY DAMAGE AT IMPACT
+	if present_tp.state["enemies"].size() > 0:
+		var target_enemy_data = present_tp.state["enemies"][0]
+		var damage = present_tp.state["player"]["damage"]
+		target_enemy_data["hp"] -= damage
+		print("  Player dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
+		
+		# Play attack sound
+		player_entity.play_attack_sound()
+		
+		# Screen shake
+		apply_screen_shake(damage * 0.5)
+		
+		# Hit reaction
+		var hit_direction = (target_enemy.position - player_entity.position).normalized()
+		target_enemy.play_hit_reaction(hit_direction)
+		
+		# Update visual
+		target_enemy.entity_data = target_enemy_data
+		target_enemy.update_display()
+		
+		# Remove enemy if dead
+		if target_enemy_data["hp"] <= 0:
+			print("  ", target_enemy_data["name"], " defeated!")
+			present_tp.state["enemies"].remove_at(0)
+			present_tp.entities.erase(target_enemy)
+			target_enemy.visible = false
+			
+			# Queue for deletion (don't delete immediately - let combat finish)
+			get_tree().create_timer(1.5).timeout.connect(func():
+				if is_instance_valid(target_enemy):
+					target_enemy.queue_free()
+			)
+	
+	# Pause at enemy
+	await get_tree().create_timer(0.1).timeout
+	
+	# Dash back
+	var tween2 = create_tween()
+	tween2.tween_property(player_entity, "position", original_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+	
+	print("  Player attack complete!")
+
+
+func animate_enemy_attacks() -> void:
+	"""Animate all enemies attacking player sequentially"""
+	var present_tp = timeline_panels[2]
+	
+	# Find player
+	var player_entity = null
+	for entity in present_tp.entities:
+		if entity.is_player:
+			player_entity = entity
+			break
+	
+	if not player_entity:
+		print("  Cannot animate - missing player")
+		return
+	
+	# Get all enemies with data
+	var enemy_list = []
+	for i in range(present_tp.state["enemies"].size()):
+		var enemy_data = present_tp.state["enemies"][i]
+		for entity in present_tp.entities:
+			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
+				enemy_list.append({"node": entity, "data": enemy_data})
+				break
+	
+	if enemy_list.size() == 0:
+		return
+	
+	print("  Enemy attacks starting...")
+	
+	# Animate each enemy sequentially
+	for enemy_info in enemy_list:
+		await animate_single_enemy_attack(enemy_info["node"], player_entity, enemy_info["data"])
+	
+	print("  All enemy attacks complete!")
+
+
+func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dictionary) -> void:
+	"""Animate single enemy attacking player"""
+	var present_tp = timeline_panels[2]
+	
+	var original_pos = enemy.position
+	var target_pos = player.position
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0
+	
+	# Dash to player
+	var tween = create_tween()
+	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await tween.finished
+	
+	# APPLY DAMAGE AT IMPACT
+	var damage = enemy_data["damage"]
+	present_tp.state["player"]["hp"] -= damage
+	print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
+	
+	# Play attack sound
+	enemy.play_attack_sound()
+	
+	# Screen shake
+	apply_screen_shake(damage * 0.5)
+	
+	# Hit reaction
+	var hit_direction = (player.position - enemy.position).normalized()
+	player.play_hit_reaction(hit_direction)
+	
+	# Update player visual
+	player.entity_data = present_tp.state["player"]
+	player.update_display()
+	
+	# Pause
+	await get_tree().create_timer(0.08).timeout
+	
+	# Dash back
+	var tween2 = create_tween()
+	tween2.tween_property(enemy, "position", original_pos, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+
+func recalculate_future_timelines():
+	"""Recalculate Future (slot 3) and Decorative Future (slot 4) after combat"""
+	var present_tp = timeline_panels[2]  # Present at slot 2
+	var future_tp = timeline_panels[3]    # Future at slot 3
+	var dec_future_tp = timeline_panels[4] # Decorative Future at slot 4
+	
+	# Calculate Future based on current Present (after combat)
+	future_tp.state = calculate_future_from_state(present_tp.state)
+	future_tp.timeline_type = "future"
+	create_timeline_entities(future_tp)
+	print("  ✅ Future recalculated")
+	
+	# Calculate Decorative Future based on new Future
+	dec_future_tp.state = calculate_future_from_state(future_tp.state)
+	dec_future_tp.timeline_type = "decorative"
+	create_timeline_entities(dec_future_tp)
+	print("  ✅ Decorative Future recalculated")
+
+func show_timeline_arrows():
+	"""Create and show arrows for Present and Future"""
+	var present_tp = timeline_panels[2]
+	var future_tp = timeline_panels[3]
+	
+	# Create arrows for Present (player → enemy)
+	create_timeline_arrows(present_tp)
+	
+	# Create arrows for Future (enemies → player)
+	create_timeline_arrows(future_tp)
+	
+	# Make sure arrows are visible
+	for tp in [present_tp, future_tp]:
+		for arrow in tp.arrows:
+			if arrow and is_instance_valid(arrow):
+				arrow.visible = true
+				arrow.show_arrow()
+	
+	print("  ✅ Arrows shown")
+
+func animate_enemy_repositioning_after_death(tp: TimelinePanel):
+	"""Animate remaining enemies repositioning after one dies"""
+	var enemy_entities = []
+	for entity in tp.entities:
+		if not entity.is_player and is_instance_valid(entity) and entity.visible:
+			enemy_entities.append(entity)
+	
+	var enemy_count = enemy_entities.size()
+	if enemy_count == 0:
+		return  # No repositioning needed for 0 or 1 enemy
+	
+	print("  ↔️ Repositioning ", enemy_count, " remaining enemies...")
+	
+	# Panel dimensions
+	var center_x = 300.0
+	var standard_height = 750.0
+	var arc_center_x = center_x
+	var arc_center_y = standard_height * 0.33
+	var arc_radius = 120.0
+	var arc_span = PI * 0.6
+	
+	var tween = create_tween()
+	tween.set_parallel(true)
+	
+	# Calculate and animate to new positions
+	for i in range(enemy_count):
+		var entity = enemy_entities[i]
+		
+		var angle_offset = 0
+		if enemy_count > 1:
+			angle_offset = (float(i) / (enemy_count - 1) - 0.5) * arc_span
+		
+		var new_pos_x = arc_center_x + arc_radius * sin(angle_offset)
+		var new_pos_y = arc_center_y - arc_radius * cos(angle_offset)
+		var new_pos = Vector2(new_pos_x, new_pos_y)
+		
+		tween.tween_property(entity, "position", new_pos, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	
+	await tween.finished
+	print("  ✅ Enemy repositioning complete")
