@@ -17,20 +17,6 @@ var is_mouse_over = false
 # Original position (for hit reactions)
 var original_position = Vector2.ZERO
 
-func setup(data: Dictionary, player: bool = false, timeline: String = "present"):
-	"""Initialize entity with data from game manager"""
-	entity_data = data
-	is_player = player
-	timeline_type = timeline
-
-func _ready():
-	"""Called when node enters scene tree"""
-	# Store original position for hit reactions
-	original_position = position
-	
-	# Update visuals
-	update_display()
-
 func _process(_delta):
 	"""Check for mouse hover (only for enemies in Past/Future)"""
 	# Only check for enemies in Past/Future timelines
@@ -55,6 +41,20 @@ func _process(_delta):
 	elif not is_mouse_over and was_over:
 		# Mouse just exited
 		damage_label.visible = false
+
+func setup(data: Dictionary, player: bool = false, timeline: String = "present"):
+	"""Initialize entity with data from game manager"""
+	entity_data = data
+	is_player = player
+	timeline_type = timeline
+
+func _ready():
+	"""Called when node enters scene tree"""
+	# Store original position for hit reactions
+	original_position = position
+	
+	# Update visuals
+	update_display()
 
 func update_display():
 	"""Update visual elements based on entity data"""

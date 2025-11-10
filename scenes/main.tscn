@@ -1,8 +1,8 @@
-[gd_scene load_steps=6 format=3 uid="uid://s3bf3lblnxxy"]
+[gd_scene load_steps=9 format=3 uid="uid://s3bf3lblnxxy"]
 
 [ext_resource type="Script" uid="uid://dm1ygihgiexpr" path="res://scripts/game_manager.gd" id="1_o5qli"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sgp6g"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o5qli"]
 bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
 border_width_left = 2
 border_width_top = 2
@@ -10,7 +10,15 @@ border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o5qli"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0wfyh"]
+bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jyhfs"]
 bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
 border_width_left = 2
 border_width_top = 2
@@ -18,7 +26,27 @@ border_width_right = 2
 border_width_bottom = 2
 border_color = Color(0.2901961, 0.61960787, 1, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_0wfyh"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tbgi4"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_tefeu"]
+bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.7058824, 0.47843137, 1, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_o6xl0"]
 bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
 border_width_left = 2
 border_width_top = 2
@@ -59,12 +87,12 @@ grow_vertical = 2
 
 [node name="DecorativePastPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 50.0
-offset_top = 200.0
-offset_right = 350.0
-offset_bottom = 700.0
-pivot_offset = Vector2(150, 250)
-theme_override_styles/panel = SubResource("StyleBoxFlat_sgp6g")
+offset_top = 150.0
+offset_right = 600.0
+offset_bottom = 900.0
+scale = Vector2(0.6, 0.6)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_o5qli")
 
 [node name="DecorativePastLabel" type="Label" parent="UIRoot/CarouselContainer/DecorativePastPanel"]
 layout_mode = 0
@@ -77,12 +105,13 @@ horizontal_alignment = 1
 
 [node name="PastPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 200.0
-offset_top = 150.0
-offset_right = 650.0
-offset_bottom = 750.0
-pivot_offset = Vector2(225, 300)
-theme_override_styles/panel = SubResource("StyleBoxFlat_sgp6g")
+offset_left = 136.0
+offset_top = 125.0
+offset_right = 736.0
+offset_bottom = 875.0
+scale = Vector2(0.75, 0.75)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
 
 [node name="PastLabel" type="Label" parent="UIRoot/CarouselContainer/PastPanel"]
 layout_mode = 0
@@ -95,12 +124,12 @@ horizontal_alignment = 1
 
 [node name="PresentPanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 585.0
+offset_left = 660.0
 offset_top = 90.0
-offset_right = 1335.0
+offset_right = 1260.0
 offset_bottom = 840.0
-pivot_offset = Vector2(375, 375)
-theme_override_styles/panel = SubResource("StyleBoxFlat_o5qli")
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_jyhfs")
 
 [node name="PresentLabel" type="Label" parent="UIRoot/CarouselContainer/PresentPanel"]
 layout_mode = 0
@@ -113,12 +142,13 @@ horizontal_alignment = 1
 
 [node name="FuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 1270.0
-offset_top = 150.0
-offset_right = 1720.0
-offset_bottom = 750.0
-pivot_offset = Vector2(225, 300)
-theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
+offset_left = 1184.0
+offset_top = 125.0
+offset_right = 1784.0
+offset_bottom = 875.0
+scale = Vector2(0.75, 0.75)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_tbgi4")
 
 [node name="FutureLabel" type="Label" parent="UIRoot/CarouselContainer/FuturePanel"]
 layout_mode = 0
@@ -131,17 +161,37 @@ horizontal_alignment = 1
 
 [node name="DecorativeFuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
 layout_mode = 0
-offset_left = 1570.0
-offset_top = 200.0
-offset_right = 1870.0
-offset_bottom = 700.0
-pivot_offset = Vector2(150, 250)
-theme_override_styles/panel = SubResource("StyleBoxFlat_0wfyh")
+offset_left = 1320.0
+offset_top = 150.0
+offset_right = 1920.0
+offset_bottom = 900.0
+scale = Vector2(0.6, 0.6)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_tefeu")
 
 [node name="DecorativeFutureLabel" type="Label" parent="UIRoot/CarouselContainer/DecorativeFuturePanel"]
 layout_mode = 0
 offset_top = 15.0
 offset_right = 300.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 20
+text = "⟳ FUTURE"
+horizontal_alignment = 1
+
+[node name="IntermediateFuturePanel" type="Panel" parent="UIRoot/CarouselContainer"]
+layout_mode = 0
+offset_left = 1300.0
+offset_top = 175.0
+offset_right = 1900.0
+offset_bottom = 925.0
+scale = Vector2(0.5, 0.5)
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_o6xl0")
+
+[node name="IntermediateFutureLabel" type="Label" parent="UIRoot/CarouselContainer/IntermediateFuturePanel"]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 600.0
 offset_bottom = 60.0
 theme_override_font_sizes/font_size = 20
 text = "⟳ FUTURE"
