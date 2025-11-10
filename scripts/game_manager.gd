@@ -694,19 +694,35 @@ func _on_card_played(card_data: Dictionary):
 	
 	print("Playing card: ", card_data.get("name", "Unknown"))
 	
+	# Get Present timeline
+	var present_tp = get_timeline_panel("present")
+	
+	# Apply card effect
 	apply_card_effect(card_data)
+	
 	card_played_this_turn = true
 	
 	for card_node in card_nodes:
 		card_node.mark_as_used()
 	
+	# Recalculate Future to show card effects
 	calculate_future_state()
 	
-	# Only update Future timeline (don't recreate Past/Present)
+	# Update Future timeline visuals
 	var future_tp = get_timeline_panel("future")
 	create_timeline_entities(future_tp)
 	create_timeline_arrows(future_tp)
 	update_timeline_ui_visibility(future_tp)
+	
+	# Update Present visuals (for healing, damage boosts, etc.)
+	create_timeline_entities(present_tp)
+	create_timeline_arrows(present_tp)
+	update_timeline_ui_visibility(present_tp)
+	
+	# CRITICAL FIX: Update damage display in UI!
+	update_damage_display()
+	
+	print("  ✅ Card effect applied and visuals updated")
 
 func apply_card_effect(card_data: Dictionary):
 	"""Apply card effect to Present timeline"""
@@ -749,14 +765,21 @@ func _on_play_button_pressed():
 	"""Execute complete turn: carousel slide → combat → future calculation"""
 	print("\n▶ PLAY button pressed - Starting complete turn sequence!")
 	
-	# Disable Play button during turn
+	# Don't execute if game over
+	if game_over:
+		return
+	
+	# Disable Play button AND cards during turn
 	play_button.disabled = true
+	disable_all_card_input()
 	
 	# Execute complete turn with combat
 	await execute_complete_turn()
 	
-	# Re-enable Play button
-	play_button.disabled = false
+	# Re-enable Play button AND cards (only if not game over)
+	if not game_over:
+		play_button.disabled = false
+		enable_all_card_input()
 	
 	print("✅ Turn complete - Ready for next turn!")
 
@@ -826,10 +849,6 @@ func execute_complete_turn():
 	print("\n🎠 PHASE 1: Carousel slide animation")
 	await carousel_slide_animation_with_blanks()
 	
-	# CRITICAL: At this point, rotation is complete!
-	# - timeline_panels[2] is the NEW Present (was Future before slide)
-	# - Its state is what we should use for combat!
-	
 	# PHASE 2: Show HP/DMG on new Present AND Past
 	print("\n💚 PHASE 2: Show HP/DMG labels")
 	show_present_ui_labels()
@@ -837,6 +856,13 @@ func execute_complete_turn():
 	# PHASE 3: Combat animations (using NEW Present state)
 	print("\n⚔️ PHASE 3: Combat animations")
 	await execute_combat_animations()
+	
+	# CRITICAL: Check for game over BEFORE recalculating future
+	var present_tp = timeline_panels[2]
+	if present_tp.state["player"]["hp"] <= 0:
+		print("\n💀 GAME OVER - Player died!")
+		handle_game_over()
+		return  # Stop turn execution
 	
 	# PHASE 4: Recalculate Future and Decorative Future
 	print("\n🔮 PHASE 4: Recalculate Future timelines")
@@ -846,7 +872,25 @@ func execute_complete_turn():
 	print("\n🏹 PHASE 5: Show arrows")
 	show_timeline_arrows()
 	
+	# PHASE 6: Reset cards for next turn
+	print("\n🎴 PHASE 6: Reset cards")
+	reset_cards_for_new_turn()
+	
 	print("✅ Complete turn executed!")
+
+func reset_cards_for_new_turn():
+	"""Reset all cards for the new turn"""
+	# Don't reset if game is over!
+	if game_over:
+		return
+	
+	card_played_this_turn = false
+	
+	for card_node in card_nodes:
+		if card_node and is_instance_valid(card_node):
+			card_node.reset()
+	
+	print("  ✅ Cards reset and ready for next turn")
 
 func carousel_slide_animation_with_blanks():
 	"""Carousel slide with Decorative Future starting blank"""
@@ -857,10 +901,10 @@ func carousel_slide_animation_with_blanks():
 	
 	var slot_2_tp = timeline_panels[2]  # Current Present
 	var slot_3_tp = timeline_panels[3]  # Current Future
-	var slot_4_tp = timeline_panels[4]
-	var slot_5_tp = timeline_panels[5]
+	var slot_4_tp = timeline_panels[4]  # Current Decorative Future
+	var slot_5_tp = timeline_panels[5]  # Current Intermediate
 	
-	# CRITICAL FIX: ALWAYS capture current Present state for Past update
+	# Capture state for Past
 	var state_for_past = slot_2_tp.state.duplicate(true)
 	
 	if is_first_turn:
@@ -868,16 +912,31 @@ func carousel_slide_animation_with_blanks():
 	else:
 		print("  🔄 Subsequent turn - Past will get current Present state (post-combat from last turn)")
 	
-	# Check if we need enemy revival animation
+	# Check if we need enemy revival animation in Future (slot 3)
 	var old_enemy_count = slot_3_tp.state.get("enemies", []).size()
 	var new_enemy_count = slot_2_tp.state.get("enemies", []).size()
 	var needs_revival = new_enemy_count > old_enemy_count
 	
-	# Prepare enemy repositioning during slide
+	# Prepare enemy repositioning during slide (only for slot 3 - Future)
 	var enemy_repositioning_tween = null
 	if needs_revival:
 		print("  🔄 Preparing enemy repositioning: ", old_enemy_count, " → ", new_enemy_count)
+		
+		# [... existing revival code for slot 3 ...]
+		# (Keep all the enemy revival/repositioning code as-is)
 	
+	# CRITICAL FIX: Clear Decorative Future (slot 4) - it should be BLANK!
+	slot_4_tp.timeline_type = "future"
+	slot_4_tp.state = {}  # Empty state
+	slot_4_tp.clear_entities()  # Remove all entities
+	print("  ✅ Decorative Future (slot 4) cleared - will be blank during slide")
+	
+	# Clear Intermediate (slot 5) - also blank
+	slot_5_tp.timeline_type = "decorative"
+	slot_5_tp.state = {}  # Empty state
+	slot_5_tp.clear_entities()  # Remove all entities
+	print("  ✅ Intermediate (slot 5) cleared - blank")
+
 	# Get current enemy entities in Future (before adding revived one)
 	var existing_enemies = []
 	for entity in slot_3_tp.entities:
@@ -973,8 +1032,8 @@ func carousel_slide_animation_with_blanks():
 	animate_slot_to_snapshot(carousel_tween, timeline_panels[1].panel_node, carousel_snapshot[0])
 	animate_slot_to_snapshot(carousel_tween, slot_2_tp.panel_node, carousel_snapshot[1])
 	animate_slot_to_snapshot(carousel_tween, slot_3_tp.panel_node, carousel_snapshot[2])
-	animate_slot_to_snapshot(carousel_tween, slot_4_tp.panel_node, carousel_snapshot[3])
-	animate_slot_to_snapshot(carousel_tween, slot_5_tp.panel_node, carousel_snapshot[4])
+	animate_slot_to_snapshot(carousel_tween, slot_4_tp.panel_node, carousel_snapshot[3])  # Slides blank!
+	animate_slot_to_snapshot(carousel_tween, slot_5_tp.panel_node, carousel_snapshot[4])  # Slides blank!
 	
 	# Colors
 	animate_panel_colors(carousel_tween, slot_2_tp.panel_node, "past")
@@ -1220,6 +1279,22 @@ func recalculate_future_timelines():
 	var future_tp = timeline_panels[3]    # Future at slot 3
 	var dec_future_tp = timeline_panels[4] # Decorative Future at slot 4
 	
+	# Check if all enemies defeated
+	if present_tp.state.get("enemies", []).size() == 0:
+		print("  🎉 All enemies defeated! Spawning new wave...")
+		
+		# Spawn new wave (same as initial for testing)
+		present_tp.state["enemies"] = [
+			{"name": "Chrono-Beast A", "hp": 45, "max_hp": 45, "damage": 12},
+			{"name": "Chrono-Beast B", "hp": 30, "max_hp": 30, "damage": 8}
+		]
+		
+		# Recreate Present entities with new enemies
+		create_timeline_entities(present_tp)
+		
+		# Update labels visibility
+		update_timeline_ui_visibility(present_tp)
+	
 	# Calculate Future based on current Present (after combat)
 	future_tp.state = calculate_future_from_state(present_tp.state)
 	future_tp.timeline_type = "future"
@@ -1292,3 +1367,38 @@ func animate_enemy_repositioning_after_death(tp: TimelinePanel):
 	
 	await tween.finished
 	print("  ✅ Enemy repositioning complete")
+
+func disable_all_card_input():
+	"""Disable mouse input on all cards"""
+	for card_node in card_nodes:
+		if card_node and is_instance_valid(card_node):
+			card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func enable_all_card_input():
+	"""Re-enable mouse input on all cards after animations"""
+	# Don't enable if game is over!
+	if game_over:
+		return
+	
+	for card_node in card_nodes:
+		if card_node and is_instance_valid(card_node):
+			# Only enable if not used
+			if not card_node.is_used:
+				card_node.mouse_filter = Control.MOUSE_FILTER_STOP
+
+func handle_game_over():
+	"""Handle player death - disable all inputs"""
+	game_over = true
+	
+	# Disable Play button
+	play_button.disabled = true
+	play_button.text = "GAME OVER"
+	
+	# Disable all cards permanently
+	disable_all_card_input()
+	for card_node in card_nodes:
+		if card_node and is_instance_valid(card_node):
+			card_node.mark_as_used()  # Gray out all cards
+	
+	print("💀 All controls disabled - Game Over!")
