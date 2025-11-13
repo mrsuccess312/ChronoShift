@@ -47,9 +47,45 @@ var turn_number = 0
 var game_over = false
 var card_played_this_turn = false
 
-# ===== CARD SYSTEM =====
-var available_cards = []  # Card data from CardDatabase
-var card_nodes = []        # Visual card nodes
+# Track base damage (for resetting after damage boost)
+var base_player_damage = 15
+
+# Track temporary effects
+var damage_boost_active = false  # Whether damage boost was used this turn
+var temporary_entities = []  # Past Twins, Conscripted Enemies
+
+# Track Future manipulation flags
+var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
+var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
+var future_scramble_active = false  # Timeline Scramble applied
+
+# ===== CARD DECK SYSTEM =====
+class CardDeck:
+	"""Manages a deck of cards for one timeline type"""
+	var timeline_type: int  # CardDatabase.TimelineType enum
+	var container: Control  # UI container for this deck
+	var cards: Array = []   # Card data array (all cards in deck)
+	var card_nodes: Array = []  # Visual card nodes (stacked)
+	
+	func _init(type: int, cont: Control):
+		timeline_type = type
+		container = cont
+	
+	func get_top_card() -> Node:
+		"""Get the top (visible) card node"""
+		if card_nodes.size() > 0:
+			return card_nodes[card_nodes.size() - 1]
+		return null
+	
+	func get_top_card_data() -> Dictionary:
+		"""Get the top card's data"""
+		if cards.size() > 0:
+			return cards[cards.size() - 1]
+		return {}
+
+var past_deck: CardDeck
+var present_deck: CardDeck
+var future_deck: CardDeck
 
 # ===== SCREEN SHAKE =====
 var shake_strength = 0.0
@@ -119,7 +155,9 @@ var carousel_snapshot = []
 @onready var play_button = $UIRoot/PlayButton
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
-@onready var card_container = $UIRoot/CardContainer
+@onready var past_deck_container = $UIRoot/DeckContainers/PastDeckContainer
+@onready var present_deck_container = $UIRoot/DeckContainers/PresentDeckContainer
+@onready var future_deck_container = $UIRoot/DeckContainers/FutureDeckContainer
 @onready var camera = $Camera2D
 
 
@@ -249,6 +287,9 @@ func initialize_game():
 		]
 	}
 	
+	# Store base damage
+	base_player_damage = 15
+	
 	# Calculate initial Future
 	calculate_future_state()
 	
@@ -345,7 +386,7 @@ func create_timeline_arrows(tp: TimelinePanel):
 			print("  Created player → enemy arrows")
 		
 		"future":
-			# Future: Enemy → Player arrows
+			# Future: Enemy → Player arrows (or Enemy → Enemy if redirected)
 			create_enemy_attack_arrows(tp)
 			print("  Created enemy → player arrows")
 
@@ -370,7 +411,7 @@ func create_player_attack_arrows(tp: TimelinePanel):
 		tp.arrows.append(arrow)
 
 func create_enemy_attack_arrows(tp: TimelinePanel):
-	"""Create arrows from each enemy to player"""
+	"""Create arrows from each enemy to player (or to other enemies if redirected)"""
 	var player_entity = null
 	for entity in tp.entities:
 		if entity.is_player:
@@ -380,15 +421,36 @@ func create_enemy_attack_arrows(tp: TimelinePanel):
 	if not player_entity:
 		return
 	
+	# Get enemy entities
+	var enemy_entities = []
 	for entity in tp.entities:
 		if not entity.is_player:
-			var arrow = ARROW_SCENE.instantiate()
-			tp.panel_node.add_child(arrow)
-			
-			var curve = calculate_smart_curve(entity.position, player_entity.position)
-			arrow.setup(entity.position, player_entity.position, curve)
-			
-			tp.arrows.append(arrow)
+			enemy_entities.append(entity)
+	
+	# Create arrows based on redirect/miss flags
+	for i in range(enemy_entities.size()):
+		var enemy = enemy_entities[i]
+		
+		# Check if this enemy will miss (no arrow)
+		if future_miss_flags.get(i, false):
+			print("  Enemy ", i, " will miss - no arrow")
+			continue
+		
+		# Check if this enemy's attack is redirected
+		var target = player_entity
+		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
+			var to_index = future_redirect_flag.get("to_enemy", -1)
+			if to_index >= 0 and to_index < enemy_entities.size():
+				target = enemy_entities[to_index]
+				print("  Enemy ", i, " arrow redirected to enemy ", to_index)
+		
+		var arrow = ARROW_SCENE.instantiate()
+		tp.panel_node.add_child(arrow)
+		
+		var curve = calculate_smart_curve(enemy.position, target.position)
+		arrow.setup(enemy.position, target.position, curve)
+		
+		tp.arrows.append(arrow)
 
 func calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 	"""Calculate arrow curve based on spatial relationship"""
@@ -457,19 +519,50 @@ func calculate_future_state():
 	# Copy Present state to Future
 	future_tp.state = present_tp.state.duplicate(true)
 	
+	# Apply Future manipulation flags if active
+	apply_future_manipulations(future_tp)
+	
 	# Simulate combat
 	if future_tp.state["enemies"].size() > 0:
+		# Player attacks
 		var target_enemy = future_tp.state["enemies"][0]
 		target_enemy["hp"] -= future_tp.state["player"]["damage"]
 		
 		# Remove dead enemies
 		future_tp.state["enemies"] = future_tp.state["enemies"].filter(func(e): return e["hp"] > 0)
 		
-		# Enemies attack back
-		for enemy in future_tp.state["enemies"]:
+		# Enemies attack back (considering miss chances and redirects)
+		for i in range(future_tp.state["enemies"].size()):
+			# Check if enemy misses
+			if future_miss_flags.get(i, false):
+				continue
+			
+			# Check if Timeline Scramble is active (player can miss too)
+			if future_scramble_active:
+				if randf() < 0.4:  # 40% miss chance
+					print("  Future: Enemy ", i, " will miss due to scramble")
+					continue
+			
+			# Check if attack is redirected
+			if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
+				var to_index = future_redirect_flag.get("to_enemy", -1)
+				if to_index >= 0 and to_index < future_tp.state["enemies"].size():
+					# Damage redirected to another enemy
+					future_tp.state["enemies"][to_index]["hp"] -= future_tp.state["enemies"][i]["damage"]
+					print("  Future: Enemy ", i, " attacks enemy ", to_index)
+					continue
+			
+			# Normal attack on player
+			var enemy = future_tp.state["enemies"][i]
 			future_tp.state["player"]["hp"] -= enemy["damage"]
 	
 	print("Future calculated: Player will have ", future_tp.state["player"]["hp"], " HP")
+
+func apply_future_manipulations(future_tp: TimelinePanel):
+	"""Apply active Future manipulation flags to the calculation"""
+	# This function is called before combat simulation
+	# The flags themselves are checked during calculate_future_state()
+	pass
 
 func update_after_carousel_slide_correct(state_for_past: Dictionary, first_turn: bool):
 	"""Update timeline types and states after carousel slide"""
@@ -665,26 +758,80 @@ func update_damage_display():
 # ===== CARD SYSTEM =====
 
 func setup_cards():
-	"""Initialize card slots"""
-	for card_node in card_nodes:
-		card_node.queue_free()
-	card_nodes.clear()
+	"""Initialize three card decks (Past, Present, Future)"""
+	print("\n=== Setting up card decks ===")
 	
+	# Create deck objects
+	past_deck = CardDeck.new(CardDatabase.TimelineType.PAST, past_deck_container)
+	present_deck = CardDeck.new(CardDatabase.TimelineType.PRESENT, present_deck_container)
+	future_deck = CardDeck.new(CardDatabase.TimelineType.FUTURE, future_deck_container)
+	
+	# Get all cards from database
 	var all_cards = CardDatabase.get_all_cards()
-	available_cards.clear()
 	
-	for i in range(min(4, all_cards.size())):
-		available_cards.append(all_cards[i])
+	# Organize cards by timeline type
+	for card_data in all_cards:
+		var timeline_type = card_data.get("timeline_type")
+		
+		match timeline_type:
+			CardDatabase.TimelineType.PAST:
+				past_deck.cards.append(card_data)
+			CardDatabase.TimelineType.PRESENT:
+				present_deck.cards.append(card_data)
+			CardDatabase.TimelineType.FUTURE:
+				future_deck.cards.append(card_data)
 	
-	for card_data in available_cards:
-		var card_node = CARD_SCENE.instantiate()
-		card_container.add_child(card_node)
-		card_node.setup(card_data)
-		card_node.card_clicked.connect(_on_card_played)
-		card_nodes.append(card_node)
+	# Shuffle each deck
+	past_deck.cards.shuffle()
+	present_deck.cards.shuffle()
+	future_deck.cards.shuffle()
+	
+	# Create visual cards for each deck
+	create_deck_visuals(past_deck)
+	create_deck_visuals(present_deck)
+	create_deck_visuals(future_deck)
 	
 	card_played_this_turn = false
-	print("Cards set up: ", available_cards.size(), " cards available")
+	
+	print("✅ Decks created:")
+	print("  Past: ", past_deck.cards.size(), " cards")
+	print("  Present: ", present_deck.cards.size(), " cards")
+	print("  Future: ", future_deck.cards.size(), " cards")
+
+func create_deck_visuals(deck: CardDeck):
+	"""Create stacked card visuals for a deck"""
+	# Clear old nodes
+	for node in deck.card_nodes:
+		if node and is_instance_valid(node):
+			node.queue_free()
+	deck.card_nodes.clear()
+	
+	# Create cards in stack (bottom to top)
+	for i in range(deck.cards.size()):
+		var card_data = deck.cards[i]
+		var card_node = CARD_SCENE.instantiate()
+		
+		# Position cards in stack (small vertical offset)
+		card_node.position = Vector2(0, 40 + i * 3)  # 3px offset per card
+		
+		deck.container.add_child(card_node)
+		card_node.setup(card_data)
+		
+		# Only top card is interactive
+		var is_top_card = (i == deck.cards.size() - 1)
+		if is_top_card:
+			card_node.card_clicked.connect(_on_card_played)
+			card_node.mouse_filter = Control.MOUSE_FILTER_STOP
+			card_node.modulate = Color(0.4, 0.4, 0.4, 0.8)  # Grayed out initially
+		else:
+			# Hidden cards (stacked below)
+			card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card_node.modulate = Color(0.2, 0.2, 0.2, 0.6)  # Darker
+			card_node.z_index = -1 - i  # Stack order
+		
+		deck.card_nodes.append(card_node)
+	
+	print("  Created ", deck.card_nodes.size(), " visual cards for deck")
 
 func _on_card_played(card_data: Dictionary):
 	"""Handle card click"""
@@ -694,16 +841,29 @@ func _on_card_played(card_data: Dictionary):
 	
 	print("Playing card: ", card_data.get("name", "Unknown"))
 	
-	# Get Present timeline
-	var present_tp = get_timeline_panel("present")
+	# Find which deck this card belongs to
+	var source_deck: CardDeck = null
+	if card_data.get("timeline_type") == CardDatabase.TimelineType.PAST:
+		source_deck = past_deck
+	elif card_data.get("timeline_type") == CardDatabase.TimelineType.PRESENT:
+		source_deck = present_deck
+	elif card_data.get("timeline_type") == CardDatabase.TimelineType.FUTURE:
+		source_deck = future_deck
+	
+	if not source_deck:
+		print("ERROR: Could not find source deck for card!")
+		return
 	
 	# Apply card effect
 	apply_card_effect(card_data)
 	
 	card_played_this_turn = true
 	
-	for card_node in card_nodes:
-		card_node.mark_as_used()
+	# Mark all top cards as used (can only play one card per turn)
+	mark_all_top_cards_used()
+	
+	# Recycle the played card (animate and move to random position in deck)
+	await recycle_card(source_deck)
 	
 	# Recalculate Future to show card effects
 	calculate_future_state()
@@ -715,6 +875,7 @@ func _on_card_played(card_data: Dictionary):
 	update_timeline_ui_visibility(future_tp)
 	
 	# Update Present visuals (for healing, damage boosts, etc.)
+	var present_tp = get_timeline_panel("present")
 	create_timeline_entities(present_tp)
 	create_timeline_arrows(present_tp)
 	update_timeline_ui_visibility(present_tp)
@@ -725,12 +886,14 @@ func _on_card_played(card_data: Dictionary):
 	print("  ✅ Card effect applied and visuals updated")
 
 func apply_card_effect(card_data: Dictionary):
-	"""Apply card effect to Present timeline"""
+	"""Apply card effect to appropriate timeline"""
 	var present_tp = get_timeline_panel("present")
+	var past_tp = get_timeline_panel("past")
 	var effect_type = card_data.get("effect_type")
 	var effect_value = card_data.get("effect_value", 0)
 	
 	match effect_type:
+		# ===== PRESENT EFFECTS =====
 		CardDatabase.EffectType.HEAL_PLAYER:
 			var current_hp = present_tp.state["player"]["hp"]
 			var max_hp = present_tp.state["player"]["max_hp"]
@@ -756,7 +919,185 @@ func apply_card_effect(card_data: Dictionary):
 		
 		CardDatabase.EffectType.BOOST_DAMAGE:
 			present_tp.state["player"]["damage"] += effect_value
-			print("Boosted damage by ", effect_value)
+			damage_boost_active = true  # Mark for reset next turn
+			print("Boosted damage by ", effect_value, " (will reset next turn)")
+		
+		CardDatabase.EffectType.ENEMY_SWAP:
+			if present_tp.state["enemies"].size() >= 2:
+				# Swap first two enemies
+				var temp = present_tp.state["enemies"][0]
+				present_tp.state["enemies"][0] = present_tp.state["enemies"][1]
+				present_tp.state["enemies"][1] = temp
+				print("Swapped enemy positions")
+		
+		# ===== PAST EFFECTS =====
+		CardDatabase.EffectType.HP_SWAP_FROM_PAST:
+			if past_tp and not past_tp.state.is_empty():
+				var past_hp = past_tp.state["player"]["hp"]
+				present_tp.state["player"]["hp"] = past_hp
+				print("HP swapped from Past: now at ", past_hp, " HP")
+			else:
+				print("No Past state available - card has no effect")
+		
+		CardDatabase.EffectType.SUMMON_PAST_TWIN:
+			if past_tp and not past_tp.state.is_empty():
+				# Create twin entity data (0.5x damage, 2x damage taken)
+				var twin_data = {
+					"name": "Past Twin",
+					"hp": past_tp.state["player"]["hp"] / 2,  # Half HP for balance
+					"max_hp": past_tp.state["player"]["max_hp"] / 2,
+					"damage": past_tp.state["player"]["damage"] / 2,  # 0.5x damage
+					"is_twin": true,
+					"damage_multiplier": 2.0  # Takes 2x damage
+				}
+				# Add as an ally (TODO: Will need special logic in combat)
+				print("Summoned Past Twin with ", twin_data["hp"], " HP and ", twin_data["damage"], " damage")
+				# For now, just boost player damage by twin's damage
+				present_tp.state["player"]["damage"] += int(twin_data["damage"])
+		
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			if past_tp and not past_tp.state.is_empty() and past_tp.state["enemies"].size() > 0:
+				# Take first enemy from Past
+				var conscripted = past_tp.state["enemies"][0].duplicate()
+				conscripted["name"] = "Conscripted " + conscripted["name"]
+				print("Conscripted ", conscripted["name"], " to fight for you")
+				# For simplicity: deal that enemy's damage to Present enemies
+				if present_tp.state["enemies"].size() > 0:
+					present_tp.state["enemies"][0]["hp"] -= conscripted["damage"]
+					if present_tp.state["enemies"][0]["hp"] <= 0:
+						present_tp.state["enemies"].remove_at(0)
+		
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			if past_tp and not past_tp.state.is_empty():
+				# Find matching enemy and calculate damage taken
+				if present_tp.state["enemies"].size() > 0 and past_tp.state["enemies"].size() > 0:
+					var present_enemy = present_tp.state["enemies"][0]
+					var past_enemy = past_tp.state["enemies"][0]
+					
+					# Damage = how much HP the enemy lost
+					var damage_taken = past_enemy["hp"] - present_enemy["hp"]
+					if damage_taken > 0:
+						present_enemy["hp"] -= damage_taken
+						print("Transferred ", damage_taken, " wound damage")
+						if present_enemy["hp"] <= 0:
+							present_tp.state["enemies"].remove_at(0)
+		
+		# ===== FUTURE EFFECTS =====
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			if present_tp.state["enemies"].size() >= 2:
+				# Redirect first enemy to attack second enemy
+				future_redirect_flag = {
+					"from_enemy": 0,
+					"to_enemy": 1
+				}
+				print("Future: Enemy 0 will attack Enemy 1")
+		
+		CardDatabase.EffectType.CHAOS_INJECTION:
+			# Mark random enemies to miss
+			var enemy_count = present_tp.state["enemies"].size()
+			if enemy_count > 0:
+				var num_to_miss = min(effect_value, enemy_count)
+				var indices = range(enemy_count)
+				indices.shuffle()
+				
+				future_miss_flags.clear()
+				for i in range(num_to_miss):
+					future_miss_flags[indices[i]] = true
+				print("Chaos Injection: ", num_to_miss, " enemies will miss")
+		
+		CardDatabase.EffectType.FUTURE_SELF_AID:
+			if present_tp.state["player"]["hp"] <= 25:
+				# Borrow HP from Future
+				present_tp.state["player"]["hp"] += effect_value
+				print("Borrowed ", effect_value, " HP from Future")
+				# Note: Future will show player dying due to this
+			else:
+				print("Cannot use Future Self Aid - HP too high (must be ≤ 25)")
+		
+		CardDatabase.EffectType.TIMELINE_SCRAMBLE:
+			future_scramble_active = true
+			print("Timeline Scramble: All attacks randomized in Future!")
+
+func mark_all_top_cards_used():
+	"""Mark all top cards as used (gray them out)"""
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			top_card.mark_as_used()
+
+func recycle_card(deck: CardDeck):
+	"""Recycle used card: animate out, move to random position, reveal new top card"""
+	print("♻️ Recycling card from deck...")
+	
+	# Get top card (the one just played)
+	var played_card = deck.get_top_card()
+	var played_card_data = deck.get_top_card_data()
+	
+	if not played_card or not is_instance_valid(played_card):
+		print("  ERROR: No valid top card to recycle")
+		return
+	
+	# Animate card shrinking and fading
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(played_card, "scale", Vector2(0.5, 0.5), 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tween.tween_property(played_card, "modulate:a", 0.0, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	await tween.finished
+	
+	# Remove from visual array and scene
+	deck.card_nodes.erase(played_card)
+	deck.cards.erase(played_card_data)
+	played_card.queue_free()
+	
+	# Insert card data at random position (not at top!)
+	if deck.cards.size() > 0:
+		var random_position = randi() % deck.cards.size()  # 0 to size-1 (not top)
+		deck.cards.insert(random_position, played_card_data)
+		print("  Card inserted at position ", random_position, " in deck of ", deck.cards.size())
+	else:
+		# If deck was empty, just add it back
+		deck.cards.append(played_card_data)
+	
+	# Recreate entire deck visuals (to maintain proper stacking)
+	create_deck_visuals(deck)
+	
+	# Reveal animation for new top card
+	await reveal_top_card(deck)
+	
+	print("  ✅ Card recycled and new top card revealed")
+
+func reveal_top_card(deck: CardDeck):
+	"""Animate new top card appearing"""
+	var top_card = deck.get_top_card()
+	if not top_card or not is_instance_valid(top_card):
+		return
+	
+	# Start invisible
+	top_card.modulate.a = 0.0
+	top_card.scale = Vector2(0.8, 0.8)
+	
+	# Animate in
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(top_card, "modulate:a", 0.8, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(top_card, "scale", Vector2(1.0, 1.0), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await tween.finished
+
+func reset_turn_effects():
+	"""Reset temporary effects at end of turn"""
+	var present_tp = get_timeline_panel("present")
+	
+	# Reset damage boost
+	if damage_boost_active:
+		present_tp.state["player"]["damage"] = base_player_damage
+		damage_boost_active = false
+		print("  Damage boost reset to base: ", base_player_damage)
+	
+	# Clear Future manipulation flags
+	future_miss_flags.clear()
+	future_redirect_flag = null
+	future_scramble_active = false
+	print("  Future manipulation flags cleared")
 
 
 # ===== TURN EXECUTION =====
@@ -845,6 +1186,10 @@ func rotate_timeline_panels_7():
 func execute_complete_turn():
 	"""Execute complete turn: slide → combat → recalculate"""
 	
+	# PHASE 0: Reset turn effects from last turn
+	print("\n🔄 PHASE 0: Reset turn effects")
+	reset_turn_effects()
+	
 	# PHASE 1: Carousel slide animation
 	print("\n🎠 PHASE 1: Carousel slide animation")
 	await carousel_slide_animation_with_blanks()
@@ -886,9 +1231,11 @@ func reset_cards_for_new_turn():
 	
 	card_played_this_turn = false
 	
-	for card_node in card_nodes:
-		if card_node and is_instance_valid(card_node):
-			card_node.reset()
+	# Reset top card in each deck
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			top_card.reset()
 	
 	print("  ✅ Cards reset and ready for next turn")
 
@@ -1315,7 +1662,7 @@ func show_timeline_arrows():
 	# Create arrows for Present (player → enemy)
 	create_timeline_arrows(present_tp)
 	
-	# Create arrows for Future (enemies → player)
+	# Create arrows for Future (enemies → player, with redirects/misses)
 	create_timeline_arrows(future_tp)
 	
 	# Make sure arrows are visible
@@ -1369,23 +1716,25 @@ func animate_enemy_repositioning_after_death(tp: TimelinePanel):
 	print("  ✅ Enemy repositioning complete")
 
 func disable_all_card_input():
-	"""Disable mouse input on all cards"""
-	for card_node in card_nodes:
-		if card_node and is_instance_valid(card_node):
-			card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	"""Disable mouse input on all top cards"""
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			top_card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 func enable_all_card_input():
-	"""Re-enable mouse input on all cards after animations"""
+	"""Re-enable mouse input on all top cards after animations"""
 	# Don't enable if game is over!
 	if game_over:
 		return
 	
-	for card_node in card_nodes:
-		if card_node and is_instance_valid(card_node):
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
 			# Only enable if not used
-			if not card_node.is_used:
-				card_node.mouse_filter = Control.MOUSE_FILTER_STOP
+			if not top_card.is_used:
+				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
 
 func handle_game_over():
 	"""Handle player death - disable all inputs"""
@@ -1397,8 +1746,9 @@ func handle_game_over():
 	
 	# Disable all cards permanently
 	disable_all_card_input()
-	for card_node in card_nodes:
-		if card_node and is_instance_valid(card_node):
-			card_node.mark_as_used()  # Gray out all cards
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			top_card.mark_as_used()  # Gray out all top cards
 	
 	print("💀 All controls disabled - Game Over!")
