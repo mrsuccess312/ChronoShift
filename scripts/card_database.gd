@@ -41,7 +41,8 @@ static func get_all_cards() -> Array:
 			"description": "Set your HP to what it was last turn",
 			"timeline_type": TimelineType.PAST,
 			"effect_type": EffectType.HP_SWAP_FROM_PAST,
-			"effect_value": 0
+			"effect_value": 0,
+			"time_cost": 8
 		},
 		# {
 		# 	"id": "summon_twin",
@@ -65,9 +66,10 @@ static func get_all_cards() -> Array:
 			"description": "Deal damage equal to enemy's wounds from Past",
 			"timeline_type": TimelineType.PAST,
 			"effect_type": EffectType.WOUND_TRANSFER,
-			"effect_value": 0
+			"effect_value": 0,
+			"time_cost": 10
 		},
-		
+
 		# ===== PRESENT CARDS =====
 		{
 			"id": "chrono_strike",
@@ -75,7 +77,8 @@ static func get_all_cards() -> Array:
 			"description": "Deal 25 damage to leftmost enemy",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.DAMAGE_ENEMY,
-			"effect_value": 25
+			"effect_value": 25,
+			"time_cost": 12
 		},
 		{
 			"id": "time_fracture",
@@ -83,7 +86,8 @@ static func get_all_cards() -> Array:
 			"description": "Deal 10 damage to all enemies",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.DAMAGE_ALL_ENEMIES,
-			"effect_value": 10
+			"effect_value": 10,
+			"time_cost": 15
 		},
 		{
 			"id": "future_sight",
@@ -91,7 +95,8 @@ static func get_all_cards() -> Array:
 			"description": "Increase damage by 10 this turn only",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.BOOST_DAMAGE,
-			"effect_value": 10
+			"effect_value": 10,
+			"time_cost": 8
 		},
 		{
 			"id": "temporal_heal",
@@ -99,7 +104,8 @@ static func get_all_cards() -> Array:
 			"description": "Restore 20 HP",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.HEAL_PLAYER,
-			"effect_value": 20
+			"effect_value": 20,
+			"time_cost": 6
 		},
 		{
 			"id": "enemy_swap",
@@ -107,9 +113,10 @@ static func get_all_cards() -> Array:
 			"description": "Swap positions of two enemies",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.ENEMY_SWAP,
-			"effect_value": 0
+			"effect_value": 0,
+			"time_cost": 5
 		},
-		
+
 		# ===== FUTURE CARDS =====
 		{
 			"id": "redirect_attack",
@@ -117,7 +124,8 @@ static func get_all_cards() -> Array:
 			"description": "Enemy attacks another enemy in Future",
 			"timeline_type": TimelineType.FUTURE,
 			"effect_type": EffectType.REDIRECT_FUTURE_ATTACK,
-			"effect_value": 0
+			"effect_value": 0,
+			"time_cost": 14
 		},
 		{
 			"id": "chaos_injection",
@@ -125,7 +133,8 @@ static func get_all_cards() -> Array:
 			"description": "2 random enemies miss in Future",
 			"timeline_type": TimelineType.FUTURE,
 			"effect_type": EffectType.CHAOS_INJECTION,
-			"effect_value": 2  # Number of enemies that will miss
+			"effect_value": 2,  # Number of enemies that will miss
+			"time_cost": 16
 		},
 		{
 			"id": "future_aid",
@@ -133,7 +142,8 @@ static func get_all_cards() -> Array:
 			"description": "Borrow 25 HP from Future (HP ≤ 25 only)",
 			"timeline_type": TimelineType.FUTURE,
 			"effect_type": EffectType.FUTURE_SELF_AID,
-			"effect_value": 25
+			"effect_value": 25,
+			"time_cost": 10
 		},
 		{
 			"id": "timeline_scramble",
@@ -141,7 +151,8 @@ static func get_all_cards() -> Array:
 			"description": "Randomize Future combat - all can miss!",
 			"timeline_type": TimelineType.FUTURE,
 			"effect_type": EffectType.TIMELINE_SCRAMBLE,
-			"effect_value": 0.4  # Miss chance percentage
+			"effect_value": 0.4,  # Miss chance percentage
+			"time_cost": 18
 		}
 	]
 

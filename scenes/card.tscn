@@ -22,6 +22,16 @@ mouse_default_cursor_shape = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_up0cc")
 script = ExtResource("1_d81rb")
 
+[node name="CostLabel" type="Label" parent="."]
+layout_mode = 2
+size_flags_horizontal = 8
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 0.8, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 20
+text = "5s"
+
 [node name="Content" type="VBoxContainer" parent="."]
 layout_mode = 2
 

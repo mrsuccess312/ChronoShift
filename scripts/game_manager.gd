@@ -45,7 +45,11 @@ const ARROW_SCENE = preload("res://scenes/arrow.tscn")
 var current_wave = 1
 var turn_number = 0
 var game_over = false
-var card_played_this_turn = false
+
+# ===== TIMER STATE =====
+var timer_active = true
+var time_remaining = 60.0  # Default: 60 seconds (1 minute)
+var max_time = 60.0
 
 # Track base damage (for resetting after damage boost)
 var base_player_damage = 15
@@ -152,6 +156,7 @@ var carousel_snapshot = []
 @onready var decorative_future_panel = $UIRoot/CarouselContainer/DecorativeFuturePanel
 @onready var intermediate_future_panel = $UIRoot/CarouselContainer/IntermediateFuturePanel
 @onready var play_button = $UIRoot/PlayButton
+@onready var timer_label = $UIRoot/TimerLabel
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
 @onready var past_deck_container = $UIRoot/DeckContainers/PastDeckContainer
@@ -288,14 +293,17 @@ func initialize_game():
 	
 	# Store base damage
 	base_player_damage = 15
-	
+
 	# Calculate initial Future
 	calculate_future_state()
-	
+
 	# Create visuals for all timelines
 	update_all_timeline_displays()
 	update_wave_counter()
 	setup_cards()
+
+	# Initialize timer display
+	update_timer_display()
 
 func get_timeline_panel(timeline_type: String) -> TimelinePanel:
 	"""Get the TimelinePanel with the specified timeline_type"""
@@ -747,6 +755,20 @@ func update_damage_display():
 	if present_tp and present_tp.state.has("player"):
 		damage_label.text = str(present_tp.state["player"]["damage"])
 
+func update_timer_display():
+	"""Update timer display with minutes:seconds format"""
+	var minutes = int(time_remaining) / 60
+	var seconds = int(time_remaining) % 60
+	timer_label.text = "%d:%02d" % [minutes, seconds]
+
+	# Change color based on time remaining
+	if time_remaining <= 10:
+		timer_label.modulate = Color(1.0, 0.3, 0.3)  # Red when low
+	elif time_remaining <= 30:
+		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Orange/yellow
+	else:
+		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Default yellow
+
 
 # ===== CARD SYSTEM =====
 
@@ -783,9 +805,10 @@ func setup_cards():
 	create_deck_visuals(past_deck)
 	create_deck_visuals(present_deck)
 	create_deck_visuals(future_deck)
-	
-	card_played_this_turn = false
-	
+
+	# Initialize card affordability based on timer
+	update_all_cards_affordability()
+
 	print("✅ Decks created:")
 	print("  Past: ", past_deck.cards.size(), " cards")
 	print("  Present: ", present_deck.cards.size(), " cards")
@@ -828,12 +851,15 @@ func create_deck_visuals(deck: CardDeck):
 
 func _on_card_played(card_data: Dictionary):
 	"""Handle card click"""
-	if card_played_this_turn:
-		print("Already played a card this turn!")
+	var time_cost = card_data.get("time_cost", 0)
+
+	# Check if player has enough time
+	if time_remaining < time_cost:
+		print("Not enough time for card: ", card_data.get("name", "Unknown"))
 		return
-	
-	print("Playing card: ", card_data.get("name", "Unknown"))
-	
+
+	print("Playing card: ", card_data.get("name", "Unknown"), " (Cost: ", time_cost, "s)")
+
 	# Find which deck this card belongs to
 	var source_deck: CardDeck = null
 	if card_data.get("timeline_type") == CardDatabase.TimelineType.PAST:
@@ -842,19 +868,24 @@ func _on_card_played(card_data: Dictionary):
 		source_deck = present_deck
 	elif card_data.get("timeline_type") == CardDatabase.TimelineType.FUTURE:
 		source_deck = future_deck
-	
+
 	if not source_deck:
 		print("ERROR: Could not find source deck for card!")
 		return
-	
+
+	# Deduct time cost from timer
+	time_remaining -= time_cost
+	if time_remaining < 0:
+		time_remaining = 0
+	update_timer_display()
+	print("  Time remaining: ", time_remaining)
+
+	# Update all cards' affordability
+	update_all_cards_affordability()
+
 	# Apply card effect
 	apply_card_effect(card_data)
-	
-	card_played_this_turn = true
-	
-	# Mark all top cards as used (can only play one card per turn)
-	mark_all_top_cards_used()
-	
+
 	# SIMPLIFIED: Recycle card immediately (no animation for now)
 	recycle_card_simple(source_deck)
 	
@@ -1022,12 +1053,12 @@ func apply_card_effect(card_data: Dictionary):
 						future_miss_flags[i] = true
 			print("Timeline Scramble: All attacks randomized in Future!")
 
-func mark_all_top_cards_used():
-	"""Mark all top cards as used (gray them out)"""
+func update_all_cards_affordability():
+	"""Update all cards' affordability based on remaining time"""
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
-			top_card.mark_as_used()
+			top_card.update_affordability(time_remaining)
 
 func recycle_card_simple(deck: CardDeck):
 	"""Simple card recycling without animations - for testing"""
@@ -1056,12 +1087,6 @@ func recycle_card_simple(deck: CardDeck):
 	
 	# Recreate all card visuals
 	create_deck_visuals(deck)
-	
-	# CRITICAL: Mark the new top card as used (can't play multiple cards per turn)
-	var new_top_card = deck.get_top_card()
-	if new_top_card and is_instance_valid(new_top_card):
-		new_top_card.mark_as_used()
-		print("  New top card marked as used (disabled until next turn)")
 	
 	print("  ✅ Card recycled - deck recreated with ", deck.card_nodes.size(), " visual cards")
 
@@ -1160,23 +1185,31 @@ func reset_turn_effects():
 func _on_play_button_pressed():
 	"""Execute complete turn: carousel slide → combat → future calculation"""
 	print("\n▶ PLAY button pressed - Starting complete turn sequence!")
-	
+
 	# Don't execute if game over
 	if game_over:
 		return
-	
+
+	# Stop timer during combat
+	timer_active = false
+
 	# Disable Play button AND cards during turn
 	play_button.disabled = true
 	disable_all_card_input()
-	
+
 	# Execute complete turn with combat
 	await execute_complete_turn()
-	
+
 	# Re-enable Play button AND cards (only if not game over)
 	if not game_over:
 		play_button.disabled = false
 		enable_all_card_input()
-	
+
+		# Reset and restart timer for next turn
+		time_remaining = max_time
+		timer_active = true
+		update_timer_display()
+
 	print("✅ Turn complete - Ready for next turn!")
 
 func execute_turn():
@@ -1188,7 +1221,8 @@ func execute_turn():
 # ===== SCREEN SHAKE =====
 
 func _process(delta):
-	"""Handle screen shake"""
+	"""Handle screen shake and timer countdown"""
+	# Screen shake
 	if shake_strength > 0:
 		camera.offset = Vector2(
 			randf_range(-shake_strength, shake_strength),
@@ -1198,6 +1232,21 @@ func _process(delta):
 		if shake_strength < 0.1:
 			shake_strength = 0.0
 			camera.offset = Vector2.ZERO
+
+	# Timer countdown
+	if timer_active and not game_over:
+		time_remaining -= delta
+		if time_remaining <= 0:
+			time_remaining = 0
+			timer_active = false
+			# Auto-press PLAY button when timer reaches 0
+			if not play_button.disabled:
+				print("\n⏰ Time's up! Auto-pressing PLAY button...")
+				_on_play_button_pressed()
+		else:
+			update_timer_display()
+			# Update card affordability as time changes
+			update_all_cards_affordability()
 
 func apply_screen_shake(strength: float = 10.0):
 	"""Trigger screen shake effect"""
@@ -1283,15 +1332,16 @@ func reset_cards_for_new_turn():
 	# Don't reset if game is over!
 	if game_over:
 		return
-	
-	card_played_this_turn = false
-	
+
 	# Reset top card in each deck
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
 			top_card.reset()
-	
+
+	# Update affordability based on timer
+	update_all_cards_affordability()
+
 	print("  ✅ Cards reset and ready for next turn")
 
 func carousel_slide_animation_with_blanks():
