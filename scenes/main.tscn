@@ -211,8 +211,8 @@ text = "▶ PLAY"
 layout_mode = 0
 offset_left = 1635.0
 offset_top = 30.0
-offset_right = 1890.0
-offset_bottom = 120.0
+offset_right = 1896.0
+offset_bottom = 126.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_sugp2")
 
 [node name="WaveLabel" type="Label" parent="UIRoot/WaveCounter"]
@@ -251,6 +251,7 @@ vertical_alignment = 1
 anchors_preset = 0
 offset_right = 1920.0
 offset_bottom = 1080.0
+mouse_filter = 2
 
 [node name="PastDeckContainer" type="Control" parent="UIRoot/DeckContainers"]
 anchors_preset = 0

@@ -21,7 +21,7 @@ enum EffectType {
 	HP_SWAP_FROM_PAST,     # Set Present HP to Past HP value
 	SUMMON_PAST_TWIN,      # Spawn Past copy that fights alongside you
 	CONSCRIPT_PAST_ENEMY,  # Take control of Past enemy for this turn
-	WOUND_TRANSFER,        # Deal damage = damage enemy took last turn
+		WOUND_TRANSFER,        # Deal damage = damage enemy took last turn
 	
 	# FUTURE EFFECTS (interact with Future predictions)
 	REDIRECT_FUTURE_ATTACK,  # Change enemy attack target to another enemy
@@ -43,22 +43,22 @@ static func get_all_cards() -> Array:
 			"effect_type": EffectType.HP_SWAP_FROM_PAST,
 			"effect_value": 0
 		},
-		{
-			"id": "summon_twin",
-			"name": "Summon Past Twin",
-			"description": "Call your past self: 0.5x damage, 2x damage taken",
-			"timeline_type": TimelineType.PAST,
-			"effect_type": EffectType.SUMMON_PAST_TWIN,
-			"effect_value": 0
-		},
-		{
-			"id": "conscript_enemy",
-			"name": "Conscript Past Enemy",
-			"description": "Past enemy fights for you this turn",
-			"timeline_type": TimelineType.PAST,
-			"effect_type": EffectType.CONSCRIPT_PAST_ENEMY,
-			"effect_value": 0
-		},
+		# {
+		# 	"id": "summon_twin",
+		# 	"name": "Summon Past Twin",
+		# 	"description": "Call your past self: 0.5x damage, 2x damage taken",
+		# 	"timeline_type": TimelineType.PAST,
+		# 	"effect_type": EffectType.SUMMON_PAST_TWIN,
+		# 	"effect_value": 0
+		# },
+		# {
+		# 	"id": "conscript_enemy",
+		# 	"name": "Conscript Past Enemy",
+		# 	"description": "Past enemy fights for you this turn",
+		# 	"timeline_type": TimelineType.PAST,
+		# 	"effect_type": EffectType.CONSCRIPT_PAST_ENEMY,
+		# 	"effect_value": 0
+		# },
 		{
 			"id": "wound_transfer",
 			"name": "Wound Transfer",
@@ -141,7 +141,7 @@ static func get_all_cards() -> Array:
 			"description": "Randomize Future combat - all can miss!",
 			"timeline_type": TimelineType.FUTURE,
 			"effect_type": EffectType.TIMELINE_SCRAMBLE,
-			"effect_value": 40  # Miss chance percentage
+			"effect_value": 0.4  # Miss chance percentage
 		}
 	]
 

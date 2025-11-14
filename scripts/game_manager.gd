@@ -57,7 +57,6 @@ var temporary_entities = []  # Past Twins, Conscripted Enemies
 # Track Future manipulation flags
 var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
 var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
-var future_scramble_active = false  # Timeline Scramble applied
 
 # ===== CARD DECK SYSTEM =====
 class CardDeck:
@@ -537,12 +536,6 @@ func calculate_future_state():
 			if future_miss_flags.get(i, false):
 				continue
 			
-			# Check if Timeline Scramble is active (player can miss too)
-			if future_scramble_active:
-				if randf() < 0.4:  # 40% miss chance
-					print("  Future: Enemy ", i, " will miss due to scramble")
-					continue
-			
 			# Check if attack is redirected
 			if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
 				var to_index = future_redirect_flag.get("to_enemy", -1)
@@ -862,8 +855,8 @@ func _on_card_played(card_data: Dictionary):
 	# Mark all top cards as used (can only play one card per turn)
 	mark_all_top_cards_used()
 	
-	# Recycle the played card (animate and move to random position in deck)
-	await recycle_card(source_deck)
+	# SIMPLIFIED: Recycle card immediately (no animation for now)
+	recycle_card_simple(source_deck)
 	
 	# Recalculate Future to show card effects
 	calculate_future_state()
@@ -880,7 +873,14 @@ func _on_card_played(card_data: Dictionary):
 	create_timeline_arrows(present_tp)
 	update_timeline_ui_visibility(present_tp)
 	
-	# CRITICAL FIX: Update damage display in UI!
+	# CRITICAL: Also update Decorative Future
+	var dec_future_tp = get_timeline_panel("decorative")
+	if dec_future_tp and dec_future_tp.timeline_type == "decorative":
+		# Recalculate decorative future based on updated Future
+		dec_future_tp.state = calculate_future_from_state(future_tp.state)
+		create_timeline_entities(dec_future_tp)
+	
+	# Update damage display in UI
 	update_damage_display()
 	
 	print("  ✅ Card effect applied and visuals updated")
@@ -891,7 +891,7 @@ func apply_card_effect(card_data: Dictionary):
 	var past_tp = get_timeline_panel("past")
 	var effect_type = card_data.get("effect_type")
 	var effect_value = card_data.get("effect_value", 0)
-	
+
 	match effect_type:
 		# ===== PRESENT EFFECTS =====
 		CardDatabase.EffectType.HEAL_PLAYER:
@@ -1015,7 +1015,11 @@ func apply_card_effect(card_data: Dictionary):
 				print("Cannot use Future Self Aid - HP too high (must be ≤ 25)")
 		
 		CardDatabase.EffectType.TIMELINE_SCRAMBLE:
-			future_scramble_active = true
+			var enemy_count = present_tp.state["enemies"].size()
+			if enemy_count > 0:
+				for i in range(enemy_count):
+					if randf() < effect_value:
+						future_miss_flags[i] = true
 			print("Timeline Scramble: All attacks randomized in Future!")
 
 func mark_all_top_cards_used():
@@ -1025,8 +1029,44 @@ func mark_all_top_cards_used():
 		if top_card and is_instance_valid(top_card):
 			top_card.mark_as_used()
 
+func recycle_card_simple(deck: CardDeck):
+	"""Simple card recycling without animations - for testing"""
+	print("♻️ Recycling card from deck (simple mode)...")
+	
+	# Get top card data
+	var played_card_data = deck.get_top_card_data()
+	
+	if played_card_data.is_empty():
+		print("  ERROR: No card data to recycle")
+		return
+	
+	print("  Playing card: ", played_card_data.get("name", "Unknown"))
+	print("  Deck size before: ", deck.cards.size())
+	
+	# Remove card from end (it was the top)
+	deck.cards.remove_at(deck.cards.size() - 1)
+	
+	print("  Deck size after removal: ", deck.cards.size())
+	
+	# Add card to front (index 0)
+	deck.cards.insert(0, played_card_data)
+	
+	print("  Deck size after insertion: ", deck.cards.size())
+	print("  New top card should be: ", deck.cards[deck.cards.size() - 1].get("name", "Unknown"))
+	
+	# Recreate all card visuals
+	create_deck_visuals(deck)
+	
+	# CRITICAL: Mark the new top card as used (can't play multiple cards per turn)
+	var new_top_card = deck.get_top_card()
+	if new_top_card and is_instance_valid(new_top_card):
+		new_top_card.mark_as_used()
+		print("  New top card marked as used (disabled until next turn)")
+	
+	print("  ✅ Card recycled - deck recreated with ", deck.card_nodes.size(), " visual cards")
+
 func recycle_card(deck: CardDeck):
-	"""Recycle used card: animate out, move to random position, reveal new top card"""
+	"""Recycle used card: animate out, move to front of queue, reveal next card"""
 	print("♻️ Recycling card from deck...")
 	
 	# Get top card (the one just played)
@@ -1037,6 +1077,9 @@ func recycle_card(deck: CardDeck):
 		print("  ERROR: No valid top card to recycle")
 		return
 	
+	print("  Playing card: ", played_card_data.get("name", "Unknown"))
+	print("  Deck size before recycle: ", deck.cards.size())
+	
 	# Animate card shrinking and fading
 	var tween = create_tween()
 	tween.set_parallel(true)
@@ -1044,22 +1087,25 @@ func recycle_card(deck: CardDeck):
 	tween.tween_property(played_card, "modulate:a", 0.0, 0.3).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	await tween.finished
 	
+	print("  Card shrink animation complete")
+	
 	# Remove from visual array and scene
 	deck.card_nodes.erase(played_card)
 	deck.cards.erase(played_card_data)
 	played_card.queue_free()
 	
-	# Insert card data at random position (not at top!)
-	if deck.cards.size() > 0:
-		var random_position = randi() % deck.cards.size()  # 0 to size-1 (not top)
-		deck.cards.insert(random_position, played_card_data)
-		print("  Card inserted at position ", random_position, " in deck of ", deck.cards.size())
-	else:
-		# If deck was empty, just add it back
-		deck.cards.append(played_card_data)
+	print("  Card removed. Deck size now: ", deck.cards.size())
+	
+	# SIMPLE QUEUE ROTATION: Move played card to front (index 0)
+	# This creates a rotation: [A, B, C, D] → play D → [D, A, B, C] → next top is C
+	deck.cards.insert(0, played_card_data)
+	print("  Card moved to front. Deck size now: ", deck.cards.size())
+	print("  New top card should be: ", deck.cards[deck.cards.size() - 1].get("name", "Unknown"))
 	
 	# Recreate entire deck visuals (to maintain proper stacking)
 	create_deck_visuals(deck)
+	
+	print("  Deck visuals recreated. Card nodes: ", deck.card_nodes.size())
 	
 	# Reveal animation for new top card
 	await reveal_top_card(deck)
@@ -1068,20 +1114,29 @@ func recycle_card(deck: CardDeck):
 
 func reveal_top_card(deck: CardDeck):
 	"""Animate new top card appearing"""
+	print("  🎴 Revealing new top card...")
+	
 	var top_card = deck.get_top_card()
 	if not top_card or not is_instance_valid(top_card):
+		print("  ERROR: No valid top card to reveal!")
 		return
 	
+	print("  Top card found: ", top_card.card_data.get("name", "Unknown"))
+	print("  Starting modulate: ", top_card.modulate)
+	print("  Starting scale: ", top_card.scale)
+	
 	# Start invisible
-	top_card.modulate.a = 0.0
+	top_card.modulate = Color(0.4, 0.4, 0.4, 0.0)  # Grayed color with 0 alpha
 	top_card.scale = Vector2(0.8, 0.8)
 	
 	# Animate in
 	var tween = create_tween()
 	tween.set_parallel(true)
-	tween.tween_property(top_card, "modulate:a", 0.8, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(top_card, "modulate", Color(0.4, 0.4, 0.4, 0.8), 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tween.tween_property(top_card, "scale", Vector2(1.0, 1.0), 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	await tween.finished
+	
+	print("  ✅ Top card reveal complete. Final modulate: ", top_card.modulate)
 
 func reset_turn_effects():
 	"""Reset temporary effects at end of turn"""
@@ -1091,12 +1146,12 @@ func reset_turn_effects():
 	if damage_boost_active:
 		present_tp.state["player"]["damage"] = base_player_damage
 		damage_boost_active = false
+		update_damage_display()  # Update UI
 		print("  Damage boost reset to base: ", base_player_damage)
 	
 	# Clear Future manipulation flags
 	future_miss_flags.clear()
 	future_redirect_flag = null
-	future_scramble_active = false
 	print("  Future manipulation flags cleared")
 
 
@@ -1186,10 +1241,6 @@ func rotate_timeline_panels_7():
 func execute_complete_turn():
 	"""Execute complete turn: slide → combat → recalculate"""
 	
-	# PHASE 0: Reset turn effects from last turn
-	print("\n🔄 PHASE 0: Reset turn effects")
-	reset_turn_effects()
-	
 	# PHASE 1: Carousel slide animation
 	print("\n🎠 PHASE 1: Carousel slide animation")
 	await carousel_slide_animation_with_blanks()
@@ -1202,6 +1253,10 @@ func execute_complete_turn():
 	print("\n⚔️ PHASE 3: Combat animations")
 	await execute_combat_animations()
 	
+	# PHASE 4: Reset turn effects from last turn
+	print("\n🔄 PHASE 4: Reset turn effects")
+	reset_turn_effects()
+
 	# CRITICAL: Check for game over BEFORE recalculating future
 	var present_tp = timeline_panels[2]
 	if present_tp.state["player"]["hp"] <= 0:
@@ -1210,15 +1265,15 @@ func execute_complete_turn():
 		return  # Stop turn execution
 	
 	# PHASE 4: Recalculate Future and Decorative Future
-	print("\n🔮 PHASE 4: Recalculate Future timelines")
+	print("\n🔮 PHASE 5: Recalculate Future timelines")
 	recalculate_future_timelines()
 	
 	# PHASE 5: Show arrows
-	print("\n🏹 PHASE 5: Show arrows")
+	print("\n🏹 PHASE 6: Show arrows")
 	show_timeline_arrows()
 	
 	# PHASE 6: Reset cards for next turn
-	print("\n🎴 PHASE 6: Reset cards")
+	print("\n🎴 PHASE 7: Reset cards")
 	reset_cards_for_new_turn()
 	
 	print("✅ Complete turn executed!")
@@ -1564,7 +1619,7 @@ func animate_enemy_attacks() -> void:
 		var enemy_data = present_tp.state["enemies"][i]
 		for entity in present_tp.entities:
 			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
-				enemy_list.append({"node": entity, "data": enemy_data})
+				enemy_list.append({"node": entity, "data": enemy_data, "index": i})
 				break
 	
 	if enemy_list.size() == 0:
@@ -1574,29 +1629,75 @@ func animate_enemy_attacks() -> void:
 	
 	# Animate each enemy sequentially
 	for enemy_info in enemy_list:
-		await animate_single_enemy_attack(enemy_info["node"], player_entity, enemy_info["data"])
+		var enemy_index = enemy_info["index"]
+		
+		# CHECK MISS FLAGS
+		if future_miss_flags.get(enemy_index, false):
+			print("  Enemy ", enemy_index, " misses (Chaos Injection effect)")
+			continue
+		
+		# CHECK REDIRECT
+		var target = player_entity
+		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == enemy_index:
+			var to_index = future_redirect_flag.get("to_enemy", -1)
+			if to_index >= 0 and to_index < enemy_list.size():
+				target = enemy_list[to_index]["node"]
+				print("  Enemy ", enemy_index, " attacks enemy ", to_index, " (Redirect effect)")
+		
+		await animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"])
 	
 	print("  All enemy attacks complete!")
 
 
-func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dictionary) -> void:
-	"""Animate single enemy attacking player"""
+func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary) -> void:
+	"""Animate single enemy attacking target (player or another enemy)"""
 	var present_tp = timeline_panels[2]
 	
 	var original_pos = enemy.position
-	var target_pos = player.position
+	var target_pos = target.position
 	var direction = (target_pos - original_pos).normalized()
 	var attack_pos = target_pos - direction * 50.0
 	
-	# Dash to player
+	# Dash to target
 	var tween = create_tween()
 	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await tween.finished
 	
 	# APPLY DAMAGE AT IMPACT
 	var damage = enemy_data["damage"]
-	present_tp.state["player"]["hp"] -= damage
-	print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
+	
+	# Check if target is player or enemy
+	if target.is_player:
+		# Attacking player
+		present_tp.state["player"]["hp"] -= damage
+		print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
+		
+		# Update player visual
+		target.entity_data = present_tp.state["player"]
+		target.update_display()
+	else:
+		# Attacking another enemy (redirect)
+		# Find target enemy in state
+		for enemy_state in present_tp.state["enemies"]:
+			if enemy_state["name"] == target.entity_data["name"]:
+				enemy_state["hp"] -= damage
+				print("  ", enemy_data["name"], " dealt ", damage, " damage to ", enemy_state["name"], "! Enemy HP: ", enemy_state["hp"])
+				
+				# Update enemy visual
+				target.entity_data = enemy_state
+				target.update_display()
+				
+				# Remove if dead
+				if enemy_state["hp"] <= 0:
+					print("  ", enemy_state["name"], " defeated by redirect!")
+					present_tp.state["enemies"].erase(enemy_state)
+					present_tp.entities.erase(target)
+					target.visible = false
+					get_tree().create_timer(1.5).timeout.connect(func():
+						if is_instance_valid(target):
+							target.queue_free()
+					)
+				break
 	
 	# Play attack sound
 	enemy.play_attack_sound()
@@ -1605,12 +1706,8 @@ func animate_single_enemy_attack(enemy: Node2D, player: Node2D, enemy_data: Dict
 	apply_screen_shake(damage * 0.5)
 	
 	# Hit reaction
-	var hit_direction = (player.position - enemy.position).normalized()
-	player.play_hit_reaction(hit_direction)
-	
-	# Update player visual
-	player.entity_data = present_tp.state["player"]
-	player.update_display()
+	var hit_direction = (target.position - enemy.position).normalized()
+	target.play_hit_reaction(hit_direction)
 	
 	# Pause
 	await get_tree().create_timer(0.08).timeout
