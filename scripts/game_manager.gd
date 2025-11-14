@@ -806,9 +806,10 @@ func setup_cards():
 	create_deck_visuals(past_deck)
 	create_deck_visuals(present_deck)
 	create_deck_visuals(future_deck)
-	
-	card_played_this_turn = false
-	
+
+	# Initialize card affordability based on timer
+	update_all_cards_affordability()
+
 	print("✅ Decks created:")
 	print("  Past: ", past_deck.cards.size(), " cards")
 	print("  Present: ", present_deck.cards.size(), " cards")
@@ -851,12 +852,15 @@ func create_deck_visuals(deck: CardDeck):
 
 func _on_card_played(card_data: Dictionary):
 	"""Handle card click"""
-	if card_played_this_turn:
-		print("Already played a card this turn!")
+	var time_cost = card_data.get("time_cost", 0)
+
+	# Check if player has enough time
+	if time_remaining < time_cost:
+		print("Not enough time for card: ", card_data.get("name", "Unknown"))
 		return
-	
-	print("Playing card: ", card_data.get("name", "Unknown"))
-	
+
+	print("Playing card: ", card_data.get("name", "Unknown"), " (Cost: ", time_cost, "s)")
+
 	# Find which deck this card belongs to
 	var source_deck: CardDeck = null
 	if card_data.get("timeline_type") == CardDatabase.TimelineType.PAST:
@@ -865,19 +869,24 @@ func _on_card_played(card_data: Dictionary):
 		source_deck = present_deck
 	elif card_data.get("timeline_type") == CardDatabase.TimelineType.FUTURE:
 		source_deck = future_deck
-	
+
 	if not source_deck:
 		print("ERROR: Could not find source deck for card!")
 		return
-	
+
+	# Deduct time cost from timer
+	time_remaining -= time_cost
+	if time_remaining < 0:
+		time_remaining = 0
+	update_timer_display()
+	print("  Time remaining: ", time_remaining)
+
+	# Update all cards' affordability
+	update_all_cards_affordability()
+
 	# Apply card effect
 	apply_card_effect(card_data)
-	
-	card_played_this_turn = true
-	
-	# Mark all top cards as used (can only play one card per turn)
-	mark_all_top_cards_used()
-	
+
 	# SIMPLIFIED: Recycle card immediately (no animation for now)
 	recycle_card_simple(source_deck)
 	
@@ -1045,12 +1054,12 @@ func apply_card_effect(card_data: Dictionary):
 						future_miss_flags[i] = true
 			print("Timeline Scramble: All attacks randomized in Future!")
 
-func mark_all_top_cards_used():
-	"""Mark all top cards as used (gray them out)"""
+func update_all_cards_affordability():
+	"""Update all cards' affordability based on remaining time"""
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
-			top_card.mark_as_used()
+			top_card.update_affordability(time_remaining)
 
 func recycle_card_simple(deck: CardDeck):
 	"""Simple card recycling without animations - for testing"""
@@ -1234,10 +1243,17 @@ func _process(delta):
 	# Timer countdown
 	if timer_active and not game_over:
 		time_remaining -= delta
-		if time_remaining < 0:
+		if time_remaining <= 0:
 			time_remaining = 0
 			timer_active = false
-		update_timer_display()
+			# Auto-press PLAY button when timer reaches 0
+			if not play_button.disabled:
+				print("\n⏰ Time's up! Auto-pressing PLAY button...")
+				_on_play_button_pressed()
+		else:
+			update_timer_display()
+			# Update card affordability as time changes
+			update_all_cards_affordability()
 
 func apply_screen_shake(strength: float = 10.0):
 	"""Trigger screen shake effect"""
@@ -1323,15 +1339,16 @@ func reset_cards_for_new_turn():
 	# Don't reset if game is over!
 	if game_over:
 		return
-	
-	card_played_this_turn = false
-	
+
 	# Reset top card in each deck
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
 			top_card.reset()
-	
+
+	# Update affordability based on timer
+	update_all_cards_affordability()
+
 	print("  ✅ Cards reset and ready for next turn")
 
 func carousel_slide_animation_with_blanks():
