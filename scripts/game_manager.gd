@@ -47,6 +47,11 @@ var turn_number = 0
 var game_over = false
 var card_played_this_turn = false
 
+# ===== TIMER STATE =====
+var timer_active = true
+var time_remaining = 60.0  # Default: 60 seconds (1 minute)
+var max_time = 60.0
+
 # Track base damage (for resetting after damage boost)
 var base_player_damage = 15
 
@@ -152,6 +157,7 @@ var carousel_snapshot = []
 @onready var decorative_future_panel = $UIRoot/CarouselContainer/DecorativeFuturePanel
 @onready var intermediate_future_panel = $UIRoot/CarouselContainer/IntermediateFuturePanel
 @onready var play_button = $UIRoot/PlayButton
+@onready var timer_label = $UIRoot/TimerLabel
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
 @onready var past_deck_container = $UIRoot/DeckContainers/PastDeckContainer
@@ -288,14 +294,17 @@ func initialize_game():
 	
 	# Store base damage
 	base_player_damage = 15
-	
+
 	# Calculate initial Future
 	calculate_future_state()
-	
+
 	# Create visuals for all timelines
 	update_all_timeline_displays()
 	update_wave_counter()
 	setup_cards()
+
+	# Initialize timer display
+	update_timer_display()
 
 func get_timeline_panel(timeline_type: String) -> TimelinePanel:
 	"""Get the TimelinePanel with the specified timeline_type"""
@@ -747,6 +756,20 @@ func update_damage_display():
 	if present_tp and present_tp.state.has("player"):
 		damage_label.text = str(present_tp.state["player"]["damage"])
 
+func update_timer_display():
+	"""Update timer display with minutes:seconds format"""
+	var minutes = int(time_remaining) / 60
+	var seconds = int(time_remaining) % 60
+	timer_label.text = "⏱ %d:%02d" % [minutes, seconds]
+
+	# Change color based on time remaining
+	if time_remaining <= 10:
+		timer_label.modulate = Color(1.0, 0.3, 0.3)  # Red when low
+	elif time_remaining <= 30:
+		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Orange/yellow
+	else:
+		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Default yellow
+
 
 # ===== CARD SYSTEM =====
 
@@ -1160,23 +1183,31 @@ func reset_turn_effects():
 func _on_play_button_pressed():
 	"""Execute complete turn: carousel slide → combat → future calculation"""
 	print("\n▶ PLAY button pressed - Starting complete turn sequence!")
-	
+
 	# Don't execute if game over
 	if game_over:
 		return
-	
+
+	# Stop timer during combat
+	timer_active = false
+
 	# Disable Play button AND cards during turn
 	play_button.disabled = true
 	disable_all_card_input()
-	
+
 	# Execute complete turn with combat
 	await execute_complete_turn()
-	
+
 	# Re-enable Play button AND cards (only if not game over)
 	if not game_over:
 		play_button.disabled = false
 		enable_all_card_input()
-	
+
+		# Reset and restart timer for next turn
+		time_remaining = max_time
+		timer_active = true
+		update_timer_display()
+
 	print("✅ Turn complete - Ready for next turn!")
 
 func execute_turn():
@@ -1188,7 +1219,8 @@ func execute_turn():
 # ===== SCREEN SHAKE =====
 
 func _process(delta):
-	"""Handle screen shake"""
+	"""Handle screen shake and timer countdown"""
+	# Screen shake
 	if shake_strength > 0:
 		camera.offset = Vector2(
 			randf_range(-shake_strength, shake_strength),
@@ -1198,6 +1230,14 @@ func _process(delta):
 		if shake_strength < 0.1:
 			shake_strength = 0.0
 			camera.offset = Vector2.ZERO
+
+	# Timer countdown
+	if timer_active and not game_over:
+		time_remaining -= delta
+		if time_remaining < 0:
+			time_remaining = 0
+			timer_active = false
+		update_timer_display()
 
 func apply_screen_shake(strength: float = 10.0):
 	"""Trigger screen shake effect"""
