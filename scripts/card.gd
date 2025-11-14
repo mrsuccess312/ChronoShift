@@ -34,7 +34,7 @@ func update_display():
 
 	# Display cost
 	var time_cost = card_data.get("time_cost", 0)
-	cost_label.text = "⏱%ds" % time_cost
+	cost_label.text = "%ds" % time_cost
 
 	# Update visual state
 	update_affordability_visual()

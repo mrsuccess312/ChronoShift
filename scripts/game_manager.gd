@@ -45,7 +45,6 @@ const ARROW_SCENE = preload("res://scenes/arrow.tscn")
 var current_wave = 1
 var turn_number = 0
 var game_over = false
-var card_played_this_turn = false
 
 # ===== TIMER STATE =====
 var timer_active = true
@@ -760,7 +759,7 @@ func update_timer_display():
 	"""Update timer display with minutes:seconds format"""
 	var minutes = int(time_remaining) / 60
 	var seconds = int(time_remaining) % 60
-	timer_label.text = "⏱ %d:%02d" % [minutes, seconds]
+	timer_label.text = "%d:%02d" % [minutes, seconds]
 
 	# Change color based on time remaining
 	if time_remaining <= 10:
@@ -1088,12 +1087,6 @@ func recycle_card_simple(deck: CardDeck):
 	
 	# Recreate all card visuals
 	create_deck_visuals(deck)
-	
-	# CRITICAL: Mark the new top card as used (can't play multiple cards per turn)
-	var new_top_card = deck.get_top_card()
-	if new_top_card and is_instance_valid(new_top_card):
-		new_top_card.mark_as_used()
-		print("  New top card marked as used (disabled until next turn)")
 	
 	print("  ✅ Card recycled - deck recreated with ", deck.card_nodes.size(), " visual cards")
 
