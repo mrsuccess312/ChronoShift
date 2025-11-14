@@ -12,6 +12,7 @@ signal card_clicked(card_data)
 var card_data = {}
 var is_used = false  # Track if card has been played this turn
 var is_affordable = true  # Track if player has enough time
+var is_hovered = false  # Track if mouse is currently hovering
 
 func setup(data: Dictionary):
 	"""Initialize card with data from CardDatabase"""
@@ -81,10 +82,12 @@ func _on_mouse_entered():
 	"""Called when mouse hovers over card"""
 	if is_used:
 		return  # Don't respond to hover if used
-	
+
+	is_hovered = true
+
 	# Stop any existing tweens first
 	_kill_active_tweens()
-	
+
 	# Brighten to full visibility
 	var tween = create_tween()
 	tween.tween_property(self, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.15)
@@ -95,32 +98,33 @@ func _on_mouse_exited():
 	"""Called when mouse leaves card"""
 	if is_used:
 		return  # Don't respond if used
-	
+
+	is_hovered = false
+
 	# Stop any existing tweens first
 	_kill_active_tweens()
-	
-	# Return to grayed out
-	var tween = create_tween()
-	tween.tween_property(self, "modulate", Color(0.4, 0.4, 0.4, 0.8), 0.15)
-	# Return to normal scale
-	tween.parallel().tween_property(self, "scale", Vector2(1.0, 1.0), 0.15)
+
+	# Return to appropriate state based on affordability
+	update_affordability_visual()
 
 func mark_as_used():
 	"""Externally mark card as used"""
 	is_used = true
-	
+	is_hovered = false
+
 	# Stop any running tweens (CRITICAL FIX)
 	_kill_active_tweens()
-	
+
 	# Force consistent state
 	scale = Vector2(1.0, 1.0)
 	modulate = Color(0.2, 0.2, 0.2, 0.5)  # Dark gray for used cards
-	
+
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func reset():
 	"""Reset card for new turn"""
 	is_used = false
+	is_hovered = false
 	scale = Vector2(1.0, 1.0)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	update_display()
@@ -133,12 +137,19 @@ func update_affordability(time_remaining: float):
 
 func update_affordability_visual():
 	"""Update visual appearance based on affordability"""
+	# Don't update visuals if card is currently being hovered
+	if is_hovered and not is_used:
+		return
+
 	if is_used:
 		modulate = Color(0.2, 0.2, 0.2, 0.5)  # Used: dark gray
+		scale = Vector2(1.0, 1.0)
 	elif not is_affordable:
 		modulate = Color(0.6, 0.2, 0.2, 0.6)  # Too expensive: reddish
+		scale = Vector2(1.0, 1.0)
 	else:
 		modulate = Color(0.4, 0.4, 0.4, 0.8)  # Normal: grayed out
+		scale = Vector2(1.0, 1.0)
 
 func play_shake_animation():
 	"""Play shake animation when card can't be used"""
