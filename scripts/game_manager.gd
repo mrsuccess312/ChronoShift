@@ -619,13 +619,20 @@ func apply_future_manipulations(future_tp: Panel):
 func update_after_carousel_slide_correct(state_for_past: Dictionary, first_turn: bool):
 	"""Update timeline types and states after carousel slide"""
 	print("🔄 Updating timeline types and states...")
-	
+
 	# Update timeline types
 	timeline_panels[0].timeline_type = "decorative"
 	timeline_panels[1].timeline_type = "past"
 	timeline_panels[2].timeline_type = "present"
 	timeline_panels[3].timeline_type = "future"
 	timeline_panels[4].timeline_type = "decorative"
+
+	# Clear entities and state from decorative panels
+	for panel in timeline_panels:
+		if panel.timeline_type == "decorative":
+			panel.clear_entities()
+			panel.state = {}
+			print("  🧹 Cleared entities from decorative panel (slot ", panel.slot_index, ")")
 
 	# Update grid cell hover colors for all panels
 	for panel in timeline_panels:
