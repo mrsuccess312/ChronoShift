@@ -179,6 +179,9 @@ func setup_carousel():
 	if timeline_panels.size() > 2:
 		carousel_container.move_child(timeline_panels[2], -1)
 
+	# Set mouse filters: only topmost panel blocks input from reaching lower panels
+	update_panel_mouse_filters()
+
 	build_carousel_snapshot()
 	print("✅ Carousel initialized with ", timeline_panels.size(), " panels")
 
@@ -217,6 +220,29 @@ func update_panel_label_text(panel: Panel, text: String):
 	"""Update the label text of a panel"""
 	if panel.has_node("PanelLabel"):
 		panel.get_node("PanelLabel").text = text
+
+func update_panel_mouse_filters():
+	"""Set mouse filters so only topmost panel blocks input to lower panels"""
+	# Find the panel with highest z_index
+	var topmost_panel = null
+	var highest_z = -999
+
+	for panel in timeline_panels:
+		if panel.z_index > highest_z:
+			highest_z = panel.z_index
+			topmost_panel = panel
+
+	# Set filters
+	for panel in timeline_panels:
+		if panel == topmost_panel:
+			# Topmost panel STOPS mouse events from reaching panels below
+			# But still passes events to its own children (grid cells)
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Value 0
+			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") set to STOP (topmost)")
+		else:
+			# Lower panels IGNORE mouse events (they won't receive them anyway)
+			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Value 2
+			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") set to IGNORE")
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""
@@ -1291,11 +1317,14 @@ func rotate_timeline_panels_7():
 
 func execute_complete_turn():
 	"""Execute complete turn: slide → combat → recalculate"""
-	
+
 	# PHASE 1: Carousel slide animation
 	print("\n🎠 PHASE 1: Carousel slide animation")
 	await carousel_slide_animation_with_blanks()
-	
+
+	# Update mouse filters after z-indices changed during carousel slide
+	update_panel_mouse_filters()
+
 	# PHASE 2: Show HP/DMG on new Present AND Past
 	print("\n💚 PHASE 2: Show HP/DMG labels")
 	show_present_ui_labels()
