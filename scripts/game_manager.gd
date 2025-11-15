@@ -27,6 +27,11 @@ var temporary_entities = []  # Past Twins, Conscripted Enemies
 var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
 var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
 
+# ===== UI/UX SETTINGS =====
+var enable_panel_hover: bool = true  # Enable floating hover animation on panels
+var show_grid_lines: bool = false    # Show grid cell borders
+var show_debug_grid: bool = false    # Show grid cell coordinates
+
 # ===== CARD DECK SYSTEM =====
 class CardDeck:
 	"""Manages a deck of cards for one timeline type"""
@@ -182,6 +187,9 @@ func setup_carousel():
 	# Set mouse filters: only topmost panel blocks input from reaching lower panels
 	update_panel_mouse_filters()
 
+	# Apply UI settings to all panels
+	apply_ui_settings_to_panels()
+
 	build_carousel_snapshot()
 	print("✅ Carousel initialized with ", timeline_panels.size(), " panels")
 
@@ -222,19 +230,36 @@ func update_panel_label_text(panel: Panel, text: String):
 		panel.get_node("PanelLabel").text = text
 
 func update_panel_mouse_filters():
-	"""Enable grids only on panels with z_index > 0"""
+	"""Enable grids and effects only on panels with z_index > 0"""
 	print("🔧 Updating panel interactivity based on z_index...")
 
 	for panel in timeline_panels:
 		if panel.z_index > 0:
 			# Panel is visible and should be interactive
 			panel.set_grid_interactive(true)  # Enable grid cells
+			if enable_panel_hover:
+				panel.start_hover_animation()  # Enable hover animation
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - INTERACTIVE")
 		else:
 			# Panel is decorative/background (z <= 0) - should not be interactive
 			panel.set_grid_interactive(false)  # Disable grid cells
+			panel.stop_hover_animation()  # Disable hover animation
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - NON-INTERACTIVE")
-		panel.start_hover_animation()
+
+func apply_ui_settings_to_panels():
+	"""Apply UI/UX settings to all timeline panels"""
+	print("🎨 Applying UI settings to panels...")
+
+	for panel in timeline_panels:
+		# Grid lines visibility
+		panel.show_grid_lines(show_grid_lines)
+
+		# Debug grid coordinates visibility
+		panel.show_debug_info(show_debug_grid)
+
+	print("  Grid lines: ", show_grid_lines)
+	print("  Debug grid: ", show_debug_grid)
+	print("  Panel hover: ", enable_panel_hover)
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""
@@ -338,7 +363,7 @@ func get_timeline_panel(timeline_type: String) -> Panel:
 # ===== ENTITY & ARROW CREATION =====
 
 func create_timeline_entities(tp: Panel):
-	"""Create entity visuals for a timeline panel"""
+	"""Create entity visuals for a timeline panel using grid-based positioning"""
 	print("\n=== Creating entities for ", tp.timeline_type, " timeline ===")
 
 	# Clear old entities
@@ -352,42 +377,40 @@ func create_timeline_entities(tp: Panel):
 	for child in tp.get_children():
 		if child is Node2D and "Label" not in child.name:
 			child.queue_free()
-	
-	# Panel dimensions
-	var center_x = 300.0
-	var standard_height = 750.0
-	
-	# Create enemy entities in semicircle
+
+	var enemy_count = tp.state.get("enemies", []).size()
+
+	# Create enemy entities using grid positioning
 	if tp.state.has("enemies"):
-		var enemy_count = tp.state["enemies"].size()
-		var arc_center_x = center_x
-		var arc_center_y = standard_height * 0.33
-		var arc_radius = 120.0
-		var arc_span = PI * 0.6
-		
 		for i in range(enemy_count):
 			var enemy_entity = ENTITY_SCENE.instantiate()
 			enemy_entity.setup(tp.state["enemies"][i], false, tp.timeline_type)
-			
-			var angle_offset = 0
-			if enemy_count > 1:
-				angle_offset = (float(i) / (enemy_count - 1) - 0.5) * arc_span
-			
-			var pos_x = arc_center_x + arc_radius * sin(angle_offset)
-			var pos_y = arc_center_y - arc_radius * cos(angle_offset)
 
-			enemy_entity.position = Vector2(pos_x, pos_y)
+			# Get grid position for this enemy
+			var grid_pos = tp.get_grid_position_for_entity(i, false, enemy_count)
+			var world_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+
+			enemy_entity.position = world_pos
 			tp.add_child(enemy_entity)
 			tp.entities.append(enemy_entity)
 
-	# Create player entity at bottom center
+			print("  Enemy ", i, " placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
+
+	# Create player entity using grid positioning
 	if tp.state.has("player"):
 		var player_entity = ENTITY_SCENE.instantiate()
 		player_entity.setup(tp.state["player"], true, tp.timeline_type)
-		player_entity.position = Vector2(center_x, standard_height * 0.8)
+
+		# Get grid position for player
+		var grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
+		var world_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+
+		player_entity.position = world_pos
 		tp.add_child(player_entity)
 		tp.entities.append(player_entity)
-	
+
+		print("  Player placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
+
 	print("  Created ", tp.entities.size(), " entities")
 
 func create_timeline_arrows(tp: Panel):
@@ -420,23 +443,30 @@ func create_timeline_arrows(tp: Panel):
 			print("  Created enemy → player arrows")
 
 func create_player_attack_arrows(tp: Panel):
-	"""Create arrow from player to leftmost enemy"""
+	"""Create arrow from player to leftmost enemy (grid-based targeting)"""
 	var player_entity = null
-	var target_enemy = null
 
+	# Find player entity
 	for entity in tp.entities:
 		if entity.is_player:
 			player_entity = entity
-		elif target_enemy == null:
-			target_enemy = entity
+			break
+
+	if not player_entity:
+		return
+
+	# Get leftmost enemy using grid-based targeting
+	var target_enemy = tp.get_leftmost_enemy()
 
 	if player_entity and target_enemy:
 		var arrow = ARROW_SCENE.instantiate()
+		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
+		arrow.z_as_relative = true
 		tp.add_child(arrow)
-		
+
 		var curve = calculate_smart_curve(player_entity.position, target_enemy.position)
 		arrow.setup(player_entity.position, target_enemy.position, curve)
-		
+
 		tp.arrows.append(arrow)
 
 func create_enemy_attack_arrows(tp: Panel):
@@ -474,11 +504,13 @@ func create_enemy_attack_arrows(tp: Panel):
 				print("  Enemy ", i, " arrow redirected to enemy ", to_index)
 
 		var arrow = ARROW_SCENE.instantiate()
+		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
+		arrow.z_as_relative = true
 		tp.add_child(arrow)
-		
+
 		var curve = calculate_smart_curve(enemy.position, target.position)
 		arrow.setup(enemy.position, target.position, curve)
-		
+
 		tp.arrows.append(arrow)
 
 func calculate_smart_curve(from: Vector2, to: Vector2) -> float:
