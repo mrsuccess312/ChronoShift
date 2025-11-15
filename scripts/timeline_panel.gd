@@ -25,6 +25,16 @@ var hover_period: float = 2.5  # 3-4 seconds
 var base_position_y: float = 0.0  # Original Y position
 var current_hover_offset: float = 0.0
 
+# Tilt effect
+var tilt_enabled: bool = false
+var mouse_over_panel: bool = false
+var mouse_position_in_panel: Vector2 = Vector2.ZERO
+var current_tilt: Vector2 = Vector2.ZERO  # X for vertical tilt, Y for horizontal tilt
+var target_tilt: Vector2 = Vector2.ZERO
+const MAX_TILT_DEGREES: float = 5.0
+const TILT_TRANSITION_SPEED: float = 3.5  # Smooth lerp speed
+const TILT_SHADOW_OFFSET_MULTIPLIER: float = 2.0  # How much shadow moves with tilt
+
 @onready var grid_container: Control = $GridContainer
 @onready var shadow: ColorRect = $Shadow
 
@@ -38,6 +48,9 @@ func _ready():
 	# Set random time offset for unique phase (0 to 2*PI)
 	time_offset = randf() * TAU
 
+	# Enable mouse input tracking for tilt effect
+	set_process_input(true)
+
 	setup_grid()
 	# Update hover colors after grid is set up
 	update_cell_hover_colors()
@@ -50,28 +63,78 @@ func initialize(type: String, slot: int):
 	update_cell_hover_colors()
 
 func _process(delta: float):
-	"""Handle hover animation each frame"""
-	if not hover_enabled:
-		return
+	"""Handle hover animation and tilt effect each frame"""
 
-	# Calculate sine wave for smooth oscillation
-	var time = Time.get_ticks_msec() / 1000.0  # Convert to seconds
-	var sine_value = sin((time / hover_period) * TAU + time_offset)
-	current_hover_offset = sine_value * hover_amplitude
+	# === HOVER ANIMATION ===
+	if hover_enabled:
+		# Calculate sine wave for smooth oscillation
+		var time = Time.get_ticks_msec() / 1000.0  # Convert to seconds
+		var sine_value = sin((time / hover_period) * TAU + time_offset)
+		current_hover_offset = sine_value * hover_amplitude
 
-	# Apply vertical offset to panel
-	position.y = base_position_y + current_hover_offset
+		# Apply vertical offset to panel
+		position.y = base_position_y + current_hover_offset
 
-	# Update shadow position (moves opposite to panel)
+	# === TILT EFFECT ===
+	if tilt_enabled:
+		# Track mouse position to determine if over panel
+		var mouse_pos = get_viewport().get_mouse_position()
+		var panel_rect = get_global_rect()
+		mouse_over_panel = panel_rect.has_point(mouse_pos)
+
+		if mouse_over_panel:
+			# Calculate mouse position relative to panel center (-1 to 1 range)
+			var panel_center = panel_rect.get_center()
+			var relative_pos = mouse_pos - panel_center
+			var normalized_x = clamp(relative_pos.x / (panel_rect.size.x / 2.0), -1.0, 1.0)
+			var normalized_y = clamp(relative_pos.y / (panel_rect.size.y / 2.0), -1.0, 1.0)
+
+			# Map to tilt angles (X movement tilts around Y axis, Y movement tilts around X axis)
+			target_tilt.x = -normalized_y * MAX_TILT_DEGREES  # Up/down tilt
+			target_tilt.y = normalized_x * MAX_TILT_DEGREES   # Left/right tilt
+		else:
+			# Mouse not over panel, reset tilt
+			target_tilt = Vector2.ZERO
+
+		# Smooth interpolation to target tilt
+		current_tilt = current_tilt.lerp(target_tilt, TILT_TRANSITION_SPEED * delta)
+
+		# Apply tilt using skew for 2D perspective effect
+		# Skew simulates 3D rotation in 2D space
+		var tilt_skew_x = deg_to_rad(current_tilt.y) * 0.5  # Horizontal tilt affects horizontal skew
+		var tilt_skew_y = deg_to_rad(current_tilt.x) * 0.5  # Vertical tilt affects vertical skew
+
+		# Apply skew to panel
+		skew = tilt_skew_x
+
+		# For vertical tilt, we can use scale to simulate perspective
+		var scale_y = 1.0 - abs(current_tilt.x) * 0.01  # Slight scale reduction when tilted up/down
+		scale.y = scale_y
+
+	# === SHADOW UPDATE ===
 	if shadow:
-		# Shadow moves down when panel moves up, and vice versa
-		shadow.position.y = 10.0 - current_hover_offset
+		var shadow_x = 10.0
+		var shadow_y = 10.0
+		var shadow_opacity = 0.3
 
-		# Shadow opacity increases when panel is higher (looks more elevated)
-		# Map hover offset (-amplitude to +amplitude) to opacity (0.2 to 0.4)
-		var normalized_height = (current_hover_offset + hover_amplitude) / (hover_amplitude * 2.0)
-		var shadow_opacity = lerp(0.2, 0.4, normalized_height)
-		shadow.modulate.a = shadow_opacity
+		# Adjust shadow based on hover animation
+		if hover_enabled:
+			# Shadow moves down when panel moves up
+			shadow_y = 10.0 - current_hover_offset
+			# Shadow opacity increases when panel is higher
+			var normalized_height = (current_hover_offset + hover_amplitude) / (hover_amplitude * 2.0)
+			shadow_opacity = lerp(0.2, 0.4, normalized_height)
+
+		# Adjust shadow based on tilt
+		if tilt_enabled:
+			# Shadow moves based on tilt direction
+			shadow_x = 10.0 + current_tilt.y * TILT_SHADOW_OFFSET_MULTIPLIER
+			shadow_y += current_tilt.x * TILT_SHADOW_OFFSET_MULTIPLIER
+			# Increase shadow opacity slightly when tilted (more depth)
+			shadow_opacity += abs(current_tilt.length()) * 0.02
+
+		shadow.position = Vector2(shadow_x, shadow_y)
+		shadow.modulate.a = clamp(shadow_opacity, 0.2, 0.5)
 
 func start_hover_animation():
 	"""Enable hover animation for this panel"""
@@ -85,12 +148,30 @@ func stop_hover_animation():
 	position.y = base_position_y
 	current_hover_offset = 0.0
 
-	# Reset shadow to default
-	if shadow:
-		shadow.position.y = 10.0
+	# Reset shadow to default (only if tilt is also disabled)
+	if shadow and not tilt_enabled:
+		shadow.position = Vector2(10.0, 10.0)
 		shadow.modulate.a = 0.3
 
 	print("  Hover animation stopped for ", timeline_type, " panel")
+
+func enable_tilt_effect(enabled: bool):
+	"""Enable or disable tilt effect for this panel"""
+	tilt_enabled = enabled
+
+	if not enabled:
+		# Reset tilt immediately
+		current_tilt = Vector2.ZERO
+		target_tilt = Vector2.ZERO
+		skew = 0.0
+		scale = Vector2.ONE
+
+		# Reset shadow to default (only if hover is also disabled)
+		if shadow and not hover_enabled:
+			shadow.position = Vector2(10.0, 10.0)
+			shadow.modulate.a = 0.3
+
+	print("  Tilt effect ", "enabled" if enabled else "disabled", " for ", timeline_type, " panel")
 
 func update_cell_hover_colors():
 	"""Update hover colors for all cells based on current timeline type"""

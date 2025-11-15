@@ -229,10 +229,12 @@ func update_panel_mouse_filters():
 		if panel.z_index > 0:
 			# Panel is visible and should be interactive
 			panel.set_grid_interactive(true)  # Enable grid cells
+			panel.enable_tilt_effect(true)  # Enable tilt effect
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - INTERACTIVE")
 		else:
 			# Panel is decorative/background (z <= 0) - should not be interactive
 			panel.set_grid_interactive(false)  # Disable grid cells
+			panel.enable_tilt_effect(false)  # Disable tilt effect
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - NON-INTERACTIVE")
 		panel.start_hover_animation()
 
@@ -1373,9 +1375,10 @@ func carousel_slide_animation_with_blanks():
 	"""Carousel slide with Decorative Future starting blank"""
 	print("\n🎠 Starting carousel slide (Decorative Future blank)...")
 
-	# Stop all hover animations during carousel transition
+	# Stop all hover animations and tilt effects during carousel transition
 	for panel in timeline_panels:
 		panel.stop_hover_animation()
+		panel.enable_tilt_effect(false)
 
 	hide_ui_for_carousel()
 	delete_all_arrows()
