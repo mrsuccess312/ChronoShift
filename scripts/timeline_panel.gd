@@ -275,49 +275,49 @@ func get_grid_position_for_entity(entity_index: int, is_player: bool, total_enem
 	"""
 	if is_player:
 		# Player always at cell (2, 1) - center bottom area
-		return Vector2i(1, 2)  # row=1, col=2
+		return Vector2i(3, 2)  # row=1, col=2
 
 	# Enemy positioning based on count
 	match total_enemies:
 		1:
 			# 1 enemy: cell (2, 3)
-			return Vector2i(3, 2)
+			return Vector2i(1, 2)
 		2:
 			# 2 enemies: cells (1, 3) and (3, 3)
 			if entity_index == 0:
-				return Vector2i(3, 1)
+				return Vector2i(1, 1)
 			else:
-				return Vector2i(3, 3)
+				return Vector2i(1, 3)
 		3:
 			# 3 enemies: cells (1, 3), (2, 4), and (3, 3)
 			if entity_index == 0:
-				return Vector2i(3, 1)
+				return Vector2i(1, 1)
 			elif entity_index == 1:
-				return Vector2i(4, 2)
+				return Vector2i(0, 2)
 			else:
-				return Vector2i(3, 3)
+				return Vector2i(1, 3)
 		4:
 			# 4 enemies: cells (1, 3), (2, 4), (3, 3), and (2, 3)
 			if entity_index == 0:
-				return Vector2i(3, 1)
+				return Vector2i(1, 1)
 			elif entity_index == 1:
-				return Vector2i(4, 2)
+				return Vector2i(0, 2)
 			elif entity_index == 2:
-				return Vector2i(3, 3)
+				return Vector2i(1, 3)
 			else:
-				return Vector2i(3, 2)
+				return Vector2i(1, 2)
 		5:
 			# 5 enemies: cells (0, 3), (1, 4), (2, 3), (3, 4), and (4, 3)
 			if entity_index == 0:
-				return Vector2i(3, 0)
+				return Vector2i(1, 0)
 			elif entity_index == 1:
-				return Vector2i(4, 1)
+				return Vector2i(0, 1)
 			elif entity_index == 2:
-				return Vector2i(3, 2)
+				return Vector2i(1, 2)
 			elif entity_index == 3:
-				return Vector2i(4, 3)
+				return Vector2i(0, 3)
 			else:
-				return Vector2i(3, 4)
+				return Vector2i(1, 4)
 		_:
 			# Fallback for 6+ enemies - distribute across row 3 and 4
 			if entity_index < 3:
