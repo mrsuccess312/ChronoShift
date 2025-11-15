@@ -1,42 +1,7 @@
 extends Node2D
 
-# ===== TIMELINE PANEL CLASS =====
-# Self-contained panel with all its data and entities
-
-class TimelinePanel:
-	var panel_node: Panel = null  # The actual Panel UI node
-	var timeline_type: String = "decorative"  # "past", "present", "future", "decorative"
-	var state: Dictionary = {}  # Game state: { player: {...}, enemies: [...] }
-	var entities: Array = []  # Entity visual nodes
-	var arrows: Array = []  # Arrow visual nodes
-	var slot_index: int = -1  # Current carousel slot position
-	
-	func _init(node: Panel, type: String, slot: int):
-		panel_node = node
-		timeline_type = type
-		slot_index = slot
-	
-	func clear_entities():
-		"""Remove all entity nodes from panel"""
-		for entity in entities:
-			if entity and is_instance_valid(entity):
-				entity.queue_free()
-		entities.clear()
-	
-	func clear_arrows():
-		"""Remove all arrow nodes from panel"""
-		for arrow in arrows:
-			if arrow and is_instance_valid(arrow):
-				arrow.queue_free()
-		arrows.clear()
-	
-	func clear_all():
-		"""Clear both entities and arrows"""
-		clear_entities()
-		clear_arrows()
-
-
 # ===== PRELOADS =====
+const TIMELINE_PANEL_SCENE = preload("res://scenes/timeline_panel.tscn")
 const ENTITY_SCENE = preload("res://scenes/entity.tscn")
 const CARD_SCENE = preload("res://scenes/card.tscn")
 const ARROW_SCENE = preload("res://scenes/arrow.tscn")
@@ -95,7 +60,7 @@ var shake_strength = 0.0
 var shake_decay = 5.0
 
 # ===== CAROUSEL SYSTEM =====
-var timeline_panels: Array[TimelinePanel] = []  # 6 TimelinePanel objects
+var timeline_panels: Array = []  # 6 timeline panel nodes (Panel instances)
 
 var is_first_turn = true
 
@@ -149,12 +114,6 @@ var carousel_snapshot = []
 
 # ===== UI REFERENCES =====
 @onready var carousel_container = $UIRoot/CarouselContainer
-@onready var decorative_past_panel = $UIRoot/CarouselContainer/DecorativePastPanel
-@onready var past_panel = $UIRoot/CarouselContainer/PastPanel
-@onready var present_panel = $UIRoot/CarouselContainer/PresentPanel
-@onready var future_panel = $UIRoot/CarouselContainer/FuturePanel
-@onready var decorative_future_panel = $UIRoot/CarouselContainer/DecorativeFuturePanel
-@onready var intermediate_future_panel = $UIRoot/CarouselContainer/IntermediateFuturePanel
 @onready var play_button = $UIRoot/PlayButton
 @onready var timer_label = $UIRoot/TimerLabel
 @onready var wave_counter_label = $UIRoot/WaveCounter/WaveLabel
@@ -192,27 +151,69 @@ func toggle_fullscreen():
 # ===== CAROUSEL SETUP =====
 
 func setup_carousel():
-	"""Initialize carousel with 6 real panels (no null placeholder)"""
+	"""Initialize carousel with 6 dynamically created timeline panels"""
 	print("Setting up carousel with 6 panels...")
-	
-	timeline_panels = [
-		TimelinePanel.new(decorative_past_panel, "decorative", 0),
-		TimelinePanel.new(past_panel, "past", 1),
-		TimelinePanel.new(present_panel, "present", 2),
-		TimelinePanel.new(future_panel, "future", 3),
-		TimelinePanel.new(decorative_future_panel, "decorative", 4),
-		TimelinePanel.new(intermediate_future_panel, "decorative", 5)
-	]  # Only 6 panels!
-	
-	for i in range(timeline_panels.size()):
-		if timeline_panels[i].panel_node != null:
-			apply_carousel_position(timeline_panels[i].panel_node, i)
-	
-	if present_panel:
-		carousel_container.move_child(present_panel, -1)
-	
+
+	# Create 6 timeline panel instances
+	var panel_types = ["decorative", "past", "present", "future", "decorative", "decorative"]
+
+	for i in range(6):
+		var panel = TIMELINE_PANEL_SCENE.instantiate()
+		panel.initialize(panel_types[i], i)
+
+		# Apply styling based on type
+		apply_panel_styling(panel, panel_types[i])
+
+		# Add to carousel container
+		carousel_container.add_child(panel)
+
+		# Apply carousel position
+		apply_carousel_position(panel, i)
+
+		# Store in array
+		timeline_panels.append(panel)
+
+		print("  Created panel ", i, " (", panel_types[i], ")")
+
+	# Move present panel to front for proper z-ordering
+	if timeline_panels.size() > 2:
+		carousel_container.move_child(timeline_panels[2], -1)
+
 	build_carousel_snapshot()
 	print("✅ Carousel initialized with ", timeline_panels.size(), " panels")
+
+func apply_panel_styling(panel: Panel, timeline_type: String):
+	"""Apply visual styling to panel based on timeline type"""
+	var stylebox = StyleBoxFlat.new()
+	stylebox.border_width_left = 2
+	stylebox.border_width_top = 2
+	stylebox.border_width_right = 2
+	stylebox.border_width_bottom = 2
+
+	match timeline_type:
+		"past":
+			stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+			stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+			update_panel_label_text(panel, "⟲ PAST")
+		"present":
+			stylebox.bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+			stylebox.border_color = Color(0.2901961, 0.61960787, 1, 1)
+			update_panel_label_text(panel, "◉ PRESENT")
+		"future":
+			stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+			stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+			update_panel_label_text(panel, "⟳ FUTURE")
+		"decorative":
+			stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+			stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+			update_panel_label_text(panel, "")
+
+	panel.add_theme_stylebox_override("panel", stylebox)
+
+func update_panel_label_text(panel: Panel, text: String):
+	"""Update the label text of a panel"""
+	if panel.has_node("PanelLabel"):
+		panel.get_node("PanelLabel").text = text
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""
@@ -305,8 +306,8 @@ func initialize_game():
 	# Initialize timer display
 	update_timer_display()
 
-func get_timeline_panel(timeline_type: String) -> TimelinePanel:
-	"""Get the TimelinePanel with the specified timeline_type"""
+func get_timeline_panel(timeline_type: String) -> Panel:
+	"""Get the timeline panel with the specified timeline_type"""
 	for tp in timeline_panels:
 		if tp.timeline_type == timeline_type:
 			return tp
@@ -315,19 +316,19 @@ func get_timeline_panel(timeline_type: String) -> TimelinePanel:
 
 # ===== ENTITY & ARROW CREATION =====
 
-func create_timeline_entities(tp: TimelinePanel):
-	"""Create entity visuals for a TimelinePanel"""
+func create_timeline_entities(tp: Panel):
+	"""Create entity visuals for a timeline panel"""
 	print("\n=== Creating entities for ", tp.timeline_type, " timeline ===")
-	
+
 	# Clear old entities
 	tp.clear_entities()
-	
-	if tp.panel_node == null or tp.state.is_empty():
+
+	if tp == null or tp.state.is_empty():
 		print("  No panel or empty state, skipping")
 		return
-	
+
 	# Clear any orphaned nodes from panel
-	for child in tp.panel_node.get_children():
+	for child in tp.get_children():
 		if child is Node2D and "Label" not in child.name:
 			child.queue_free()
 	
@@ -353,29 +354,29 @@ func create_timeline_entities(tp: TimelinePanel):
 			
 			var pos_x = arc_center_x + arc_radius * sin(angle_offset)
 			var pos_y = arc_center_y - arc_radius * cos(angle_offset)
-			
+
 			enemy_entity.position = Vector2(pos_x, pos_y)
-			tp.panel_node.add_child(enemy_entity)
+			tp.add_child(enemy_entity)
 			tp.entities.append(enemy_entity)
-	
+
 	# Create player entity at bottom center
 	if tp.state.has("player"):
 		var player_entity = ENTITY_SCENE.instantiate()
 		player_entity.setup(tp.state["player"], true, tp.timeline_type)
 		player_entity.position = Vector2(center_x, standard_height * 0.8)
-		tp.panel_node.add_child(player_entity)
+		tp.add_child(player_entity)
 		tp.entities.append(player_entity)
 	
 	print("  Created ", tp.entities.size(), " entities")
 
-func create_timeline_arrows(tp: TimelinePanel):
-	"""Create arrows for a TimelinePanel based on its timeline_type"""
+func create_timeline_arrows(tp: Panel):
+	"""Create arrows for a timeline panel based on its timeline_type"""
 	print("🏹 Creating arrows for ", tp.timeline_type, " timeline...")
-	
+
 	# Clear old arrows
 	tp.clear_arrows()
-	
-	if tp.panel_node == null or tp.state.is_empty():
+
+	if tp == null or tp.state.is_empty():
 		return
 	
 	if not tp.state.has("enemies") or tp.state["enemies"].size() == 0:
@@ -397,52 +398,52 @@ func create_timeline_arrows(tp: TimelinePanel):
 			create_enemy_attack_arrows(tp)
 			print("  Created enemy → player arrows")
 
-func create_player_attack_arrows(tp: TimelinePanel):
+func create_player_attack_arrows(tp: Panel):
 	"""Create arrow from player to leftmost enemy"""
 	var player_entity = null
 	var target_enemy = null
-	
+
 	for entity in tp.entities:
 		if entity.is_player:
 			player_entity = entity
 		elif target_enemy == null:
 			target_enemy = entity
-	
+
 	if player_entity and target_enemy:
 		var arrow = ARROW_SCENE.instantiate()
-		tp.panel_node.add_child(arrow)
+		tp.add_child(arrow)
 		
 		var curve = calculate_smart_curve(player_entity.position, target_enemy.position)
 		arrow.setup(player_entity.position, target_enemy.position, curve)
 		
 		tp.arrows.append(arrow)
 
-func create_enemy_attack_arrows(tp: TimelinePanel):
+func create_enemy_attack_arrows(tp: Panel):
 	"""Create arrows from each enemy to player (or to other enemies if redirected)"""
 	var player_entity = null
 	for entity in tp.entities:
 		if entity.is_player:
 			player_entity = entity
 			break
-	
+
 	if not player_entity:
 		return
-	
+
 	# Get enemy entities
 	var enemy_entities = []
 	for entity in tp.entities:
 		if not entity.is_player:
 			enemy_entities.append(entity)
-	
+
 	# Create arrows based on redirect/miss flags
 	for i in range(enemy_entities.size()):
 		var enemy = enemy_entities[i]
-		
+
 		# Check if this enemy will miss (no arrow)
 		if future_miss_flags.get(i, false):
 			print("  Enemy ", i, " will miss - no arrow")
 			continue
-		
+
 		# Check if this enemy's attack is redirected
 		var target = player_entity
 		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
@@ -450,9 +451,9 @@ func create_enemy_attack_arrows(tp: TimelinePanel):
 			if to_index >= 0 and to_index < enemy_entities.size():
 				target = enemy_entities[to_index]
 				print("  Enemy ", i, " arrow redirected to enemy ", to_index)
-		
+
 		var arrow = ARROW_SCENE.instantiate()
-		tp.panel_node.add_child(arrow)
+		tp.add_child(arrow)
 		
 		var curve = calculate_smart_curve(enemy.position, target.position)
 		arrow.setup(enemy.position, target.position, curve)
@@ -485,7 +486,7 @@ func update_all_timeline_displays():
 	update_damage_display()
 	print("=== All timelines updated ===")
 
-func update_timeline_ui_visibility(tp: TimelinePanel):
+func update_timeline_ui_visibility(tp: Panel):
 	"""Update UI element visibility based on timeline_type"""
 	for entity in tp.entities:
 		if not entity or not is_instance_valid(entity):
@@ -559,7 +560,7 @@ func calculate_future_state():
 	
 	print("Future calculated: Player will have ", future_tp.state["player"]["hp"], " HP")
 
-func apply_future_manipulations(future_tp: TimelinePanel):
+func apply_future_manipulations(future_tp: Panel):
 	"""Apply active Future manipulation flags to the calculation"""
 	# This function is called before combat simulation
 	# The flags themselves are checked during calculate_future_state()
@@ -721,25 +722,19 @@ func animate_panel_colors(tween: Tween, panel: Panel, new_type: String):
 func update_panel_labels():
 	"""Update panel label text to match timeline types"""
 	print("🏷️ Updating panel labels...")
-	
+
 	# timeline_panels[1] is now Past
-	if timeline_panels[1].panel_node:
-		for child in timeline_panels[1].panel_node.get_children():
-			if "Label" in child.name:
-				child.text = "⟲ PAST"
-	
+	if timeline_panels.size() > 1:
+		update_panel_label_text(timeline_panels[1], "⟲ PAST")
+
 	# timeline_panels[2] is now Present
-	if timeline_panels[2].panel_node:
-		for child in timeline_panels[2].panel_node.get_children():
-			if "Label" in child.name:
-				child.text = "◉ PRESENT"
-	
+	if timeline_panels.size() > 2:
+		update_panel_label_text(timeline_panels[2], "◉ PRESENT")
+
 	# timeline_panels[3] is now Future
-	if timeline_panels[3].panel_node:
-		for child in timeline_panels[3].panel_node.get_children():
-			if "Label" in child.name:
-				child.text = "⟳ FUTURE"
-	
+	if timeline_panels.size() > 3:
+		update_panel_label_text(timeline_panels[3], "⟳ FUTURE")
+
 	print("✅ Panel labels updated!")
 
 
@@ -1269,22 +1264,22 @@ func calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 func rotate_timeline_panels_7():
 	"""Rotate 6-panel carousel"""
 	print("🔄 Rotating carousel...")
-	
+
 	var old_slot_0 = timeline_panels[0]
 	old_slot_0.clear_all()
-	
+
 	timeline_panels.remove_at(0)  # Now we have 5 elements
 	timeline_panels.append(old_slot_0)  # Add back at end - now we have 6 again!
-	
+
 	old_slot_0.timeline_type = "decorative"
 	old_slot_0.slot_index = 5
-	
-	if old_slot_0.panel_node != null:
-		apply_carousel_position(old_slot_0.panel_node, 5)
-	
+
+	if old_slot_0 != null:
+		apply_carousel_position(old_slot_0, 5)
+
 	for i in range(timeline_panels.size()):
 		timeline_panels[i].slot_index = i
-	
+
 	print("✅ Rotated! Array size: ", timeline_panels.size())
 
 func execute_complete_turn():
@@ -1425,8 +1420,8 @@ func carousel_slide_animation_with_blanks():
 		revived_enemy.get_node("HPLabel").visible = false
 	if revived_enemy.has_node("DamageLabel"):
 		revived_enemy.get_node("DamageLabel").visible = false
-	
-	slot_3_tp.panel_node.add_child(revived_enemy)
+
+	slot_3_tp.add_child(revived_enemy)
 	slot_3_tp.entities.append(revived_enemy)
 	
 	# Create tween for enemy repositioning (runs in parallel with carousel slide)
@@ -1459,38 +1454,38 @@ func carousel_slide_animation_with_blanks():
 		enemy_repositioning_tween.tween_property(entity, "position", new_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	
 	# Duplicate StyleBoxes
-	var present_stylebox = slot_2_tp.panel_node.get_theme_stylebox("panel").duplicate()
-	slot_2_tp.panel_node.add_theme_stylebox_override("panel", present_stylebox)
-	
-	var future_stylebox = slot_3_tp.panel_node.get_theme_stylebox("panel").duplicate()
-	slot_3_tp.panel_node.add_theme_stylebox_override("panel", future_stylebox)
-	
-	var decorative_past_stylebox = timeline_panels[0].panel_node.get_theme_stylebox("panel").duplicate()
-	timeline_panels[0].panel_node.add_theme_stylebox_override("panel", decorative_past_stylebox)
-	
+	var present_stylebox = slot_2_tp.get_theme_stylebox("panel").duplicate()
+	slot_2_tp.add_theme_stylebox_override("panel", present_stylebox)
+
+	var future_stylebox = slot_3_tp.get_theme_stylebox("panel").duplicate()
+	slot_3_tp.add_theme_stylebox_override("panel", future_stylebox)
+
+	var decorative_past_stylebox = timeline_panels[0].get_theme_stylebox("panel").duplicate()
+	timeline_panels[0].add_theme_stylebox_override("panel", decorative_past_stylebox)
+
 	# Z-index
-	timeline_panels[0].panel_node.z_index = 0
-	timeline_panels[1].panel_node.z_index = 1
-	slot_2_tp.panel_node.z_index = 2
-	slot_3_tp.panel_node.z_index = 1
-	slot_4_tp.panel_node.z_index = 0
-	slot_5_tp.panel_node.z_index = -1
+	timeline_panels[0].z_index = 0
+	timeline_panels[1].z_index = 1
+	slot_2_tp.z_index = 2
+	slot_3_tp.z_index = 1
+	slot_4_tp.z_index = 0
+	slot_5_tp.z_index = -1
 	
 	# Animate carousel slide
 	var carousel_tween = create_tween()
 	carousel_tween.set_parallel(true)
-	
-	animate_slot_to_void(carousel_tween, timeline_panels[0].panel_node)
-	animate_slot_to_snapshot(carousel_tween, timeline_panels[1].panel_node, carousel_snapshot[0])
-	animate_slot_to_snapshot(carousel_tween, slot_2_tp.panel_node, carousel_snapshot[1])
-	animate_slot_to_snapshot(carousel_tween, slot_3_tp.panel_node, carousel_snapshot[2])
-	animate_slot_to_snapshot(carousel_tween, slot_4_tp.panel_node, carousel_snapshot[3])  # Slides blank!
-	animate_slot_to_snapshot(carousel_tween, slot_5_tp.panel_node, carousel_snapshot[4])  # Slides blank!
-	
+
+	animate_slot_to_void(carousel_tween, timeline_panels[0])
+	animate_slot_to_snapshot(carousel_tween, timeline_panels[1], carousel_snapshot[0])
+	animate_slot_to_snapshot(carousel_tween, slot_2_tp, carousel_snapshot[1])
+	animate_slot_to_snapshot(carousel_tween, slot_3_tp, carousel_snapshot[2])
+	animate_slot_to_snapshot(carousel_tween, slot_4_tp, carousel_snapshot[3])  # Slides blank!
+	animate_slot_to_snapshot(carousel_tween, slot_5_tp, carousel_snapshot[4])  # Slides blank!
+
 	# Colors
-	animate_panel_colors(carousel_tween, slot_2_tp.panel_node, "past")
-	animate_panel_colors(carousel_tween, slot_3_tp.panel_node, "present")
-	animate_panel_colors(carousel_tween, timeline_panels[0].panel_node, "future")
+	animate_panel_colors(carousel_tween, slot_2_tp, "past")
+	animate_panel_colors(carousel_tween, slot_3_tp, "present")
+	animate_panel_colors(carousel_tween, timeline_panels[0], "future")
 	
 	# Both animations happen simultaneously
 	await carousel_tween.finished
@@ -1821,7 +1816,7 @@ func show_timeline_arrows():
 	
 	print("  ✅ Arrows shown")
 
-func animate_enemy_repositioning_after_death(tp: TimelinePanel):
+func animate_enemy_repositioning_after_death(tp: Panel):
 	"""Animate remaining enemies repositioning after one dies"""
 	var enemy_entities = []
 	for entity in tp.entities:

@@ -1,0 +1,29 @@
+[gd_scene load_steps=3 format=3 uid="uid://c8vx7k2n3m9qr"]
+
+[ext_resource type="Script" path="res://scripts/timeline_panel.gd" id="1_timeline"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_timeline"]
+bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.2901961, 0.61960787, 1, 1)
+
+[node name="TimelinePanel" type="Panel"]
+offset_right = 600.0
+offset_bottom = 750.0
+pivot_offset = Vector2(300, 375)
+theme_override_styles/panel = SubResource("StyleBoxFlat_timeline")
+script = ExtResource("1_timeline")
+
+[node name="PanelLabel" type="Label" parent="."]
+layout_mode = 0
+offset_top = 15.0
+offset_right = 300.0
+offset_bottom = 50.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.7)
+theme_override_font_sizes/font_size = 20
+text = "◉ PANEL"
+horizontal_alignment = 1
+vertical_alignment = 1
