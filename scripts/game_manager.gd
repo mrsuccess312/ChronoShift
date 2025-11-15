@@ -1458,29 +1458,18 @@ func carousel_slide_animation_with_blanks():
 	
 	# Update state to include revived enemy
 	slot_3_tp.state["enemies"] = slot_2_tp.state["enemies"].duplicate(true)
-	
-	# Create the revived enemy entity
-	var panel_center_x = 300.0
-	var panel_height = 750.0
-	var arc_center_y = panel_height * 0.33
-	var arc_radius = 120.0
-	var arc_span = PI * 0.6
-	
-	# Calculate position for revived enemy (it's the last one in the list)
+
+	# Calculate grid position for revived enemy (it's the last one in the list)
 	var revived_index = new_enemy_count - 1
-	var revived_angle = 0
-	if new_enemy_count > 1:
-		revived_angle = (float(revived_index) / (new_enemy_count - 1) - 0.5) * arc_span
-	
-	var revived_pos_x = panel_center_x + arc_radius * sin(revived_angle)
-	var revived_pos_y = arc_center_y - arc_radius * cos(revived_angle)
-	
+	var revived_grid_pos = slot_3_tp.get_grid_position_for_entity(revived_index, false, new_enemy_count)
+	var revived_world_pos = slot_3_tp.get_cell_center_position(revived_grid_pos.x, revived_grid_pos.y)
+
 	# Create revived enemy entity
 	var revived_enemy = ENTITY_SCENE.instantiate()
 	revived_enemy.setup(slot_3_tp.state["enemies"][revived_index], false, "future")
-	revived_enemy.position = Vector2(revived_pos_x, revived_pos_y)
+	revived_enemy.position = revived_world_pos
 	revived_enemy.modulate.a = 0.0  # Start invisible
-	
+
 	# CRITICAL FIX: Hide HP/DMG labels on revived enemy (carousel slide in progress!)
 	if revived_enemy.has_node("HPLabel"):
 		revived_enemy.get_node("HPLabel").visible = false
@@ -1489,35 +1478,34 @@ func carousel_slide_animation_with_blanks():
 
 	slot_3_tp.add_child(revived_enemy)
 	slot_3_tp.entities.append(revived_enemy)
-	
+
+	print("  🔄 Revived enemy at grid (", revived_grid_pos.x, ", ", revived_grid_pos.y, ") → ", revived_world_pos)
+
 	# Create tween for enemy repositioning (runs in parallel with carousel slide)
 	enemy_repositioning_tween = create_tween()
 	enemy_repositioning_tween.set_parallel(true)
-	
+
 	# Fade in the revived enemy
 	enemy_repositioning_tween.tween_property(revived_enemy, "modulate:a", 1.0, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	
-	# Reposition existing enemies based on new count
+
+	# Reposition existing enemies based on new grid layout with new count
 	for i in range(existing_enemies.size()):
 		var entity = existing_enemies[i]
-		
+
 		# CRITICAL FIX: Ensure HP/DMG labels stay hidden during repositioning
 		if entity.has_node("HPLabel"):
 			entity.get_node("HPLabel").visible = false
 		if entity.has_node("DamageLabel"):
 			entity.get_node("DamageLabel").visible = false
-		
-		# Calculate new position with new enemy count
-		var new_angle = 0
-		if new_enemy_count > 1:
-			new_angle = (float(i) / (new_enemy_count - 1) - 0.5) * arc_span
-		
-		var new_pos_x = panel_center_x + arc_radius * sin(new_angle)
-		var new_pos_y = arc_center_y - arc_radius * cos(new_angle)
-		var new_pos = Vector2(new_pos_x, new_pos_y)
-		
-		# Slide existing enemy to new position
-		enemy_repositioning_tween.tween_property(entity, "position", new_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+		# Calculate new grid position with new enemy count
+		var new_grid_pos = slot_3_tp.get_grid_position_for_entity(i, false, new_enemy_count)
+		var new_world_pos = slot_3_tp.get_cell_center_position(new_grid_pos.x, new_grid_pos.y)
+
+		print("  ↔️ Existing enemy ", i, " → grid (", new_grid_pos.x, ", ", new_grid_pos.y, ") at ", new_world_pos)
+
+		# Slide existing enemy to new grid position
+		enemy_repositioning_tween.tween_property(entity, "position", new_world_pos, 1.0).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	
 	# Duplicate StyleBoxes
 	var present_stylebox = slot_2_tp.get_theme_stylebox("panel").duplicate()
@@ -1883,43 +1871,32 @@ func show_timeline_arrows():
 	print("  ✅ Arrows shown")
 
 func animate_enemy_repositioning_after_death(tp: Panel):
-	"""Animate remaining enemies repositioning after one dies"""
+	"""Animate remaining enemies repositioning after one dies using grid-based layout"""
 	var enemy_entities = []
 	for entity in tp.entities:
 		if not entity.is_player and is_instance_valid(entity) and entity.visible:
 			enemy_entities.append(entity)
-	
+
 	var enemy_count = enemy_entities.size()
 	if enemy_count == 0:
-		return  # No repositioning needed for 0 or 1 enemy
-	
-	print("  ↔️ Repositioning ", enemy_count, " remaining enemies...")
-	
-	# Panel dimensions
-	var center_x = 300.0
-	var standard_height = 750.0
-	var arc_center_x = center_x
-	var arc_center_y = standard_height * 0.33
-	var arc_radius = 120.0
-	var arc_span = PI * 0.6
-	
+		return  # No repositioning needed for 0 enemies
+
+	print("  ↔️ Repositioning ", enemy_count, " remaining enemies to grid cells...")
+
 	var tween = create_tween()
 	tween.set_parallel(true)
-	
-	# Calculate and animate to new positions
+
+	# Calculate and animate to new grid-based positions
 	for i in range(enemy_count):
 		var entity = enemy_entities[i]
-		
-		var angle_offset = 0
-		if enemy_count > 1:
-			angle_offset = (float(i) / (enemy_count - 1) - 0.5) * arc_span
-		
-		var new_pos_x = arc_center_x + arc_radius * sin(angle_offset)
-		var new_pos_y = arc_center_y - arc_radius * cos(angle_offset)
-		var new_pos = Vector2(new_pos_x, new_pos_y)
-		
+
+		# Get grid position for this enemy based on new count
+		var grid_pos = tp.get_grid_position_for_entity(i, false, enemy_count)
+		var new_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+
+		print("    Enemy ", i, " → grid (", grid_pos.x, ", ", grid_pos.y, ") at ", new_pos)
 		tween.tween_property(entity, "position", new_pos, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	
+
 	await tween.finished
 	print("  ✅ Enemy repositioning complete")
 
