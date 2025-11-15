@@ -27,6 +27,16 @@ func initialize(type: String, slot: int):
 	"""Initialize the timeline panel with type and slot index"""
 	timeline_type = type
 	slot_index = slot
+	update_cell_hover_colors()
+
+func update_cell_hover_colors():
+	"""Update hover colors for all cells based on current timeline type"""
+	var hover_color = get_timeline_hover_color()
+	for row in range(GRID_ROWS):
+		for col in range(GRID_COLS):
+			var cell = grid_cells[row][col]
+			if cell:
+				cell.set_hover_color(hover_color)
 
 func clear_entities():
 	"""Remove all entity nodes from panel"""
@@ -76,8 +86,23 @@ func setup_grid():
 			# Position cell (100px wide, 126px tall per cell)
 			cell.position = Vector2(col * 100, row * 126)
 
+			# Set timeline-appropriate hover color
+			cell.set_hover_color(get_timeline_hover_color())
+
 			grid_container.add_child(cell)
 			grid_cells[row][col] = cell
+
+func get_timeline_hover_color() -> Color:
+	"""Get hover color based on timeline type"""
+	match timeline_type:
+		"past":
+			return Color(0.54509807, 0.43529412, 0.2784314, 0.3)  # Brown
+		"present":
+			return Color(0.2901961, 0.61960787, 1, 0.3)  # Blue
+		"future":
+			return Color(0.7058824, 0.47843137, 1, 0.3)  # Purple
+		_:
+			return Color(1, 1, 1, 0.3)  # White default
 
 func get_cell_at_position(row: int, col: int):
 	"""Get grid cell at specific row/col coordinates"""
@@ -98,6 +123,53 @@ func clear_all_highlights():
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.hide_highlight()
+
+func show_grid_lines(visible: bool):
+	"""Toggle grid lines visibility for all cells"""
+	for row in range(GRID_ROWS):
+		for col in range(GRID_COLS):
+			var cell = grid_cells[row][col]
+			if cell:
+				cell.show_grid_lines(visible)
+
+func show_debug_info(visible: bool):
+	"""Toggle debug coordinate labels for all cells"""
+	for row in range(GRID_ROWS):
+		for col in range(GRID_COLS):
+			var cell = grid_cells[row][col]
+			if cell:
+				cell.show_debug_info(visible)
+
+func place_entity_at_cell(entity: Node2D, row: int, col: int):
+	"""Place an entity at the center of a specific grid cell"""
+	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+		print("Warning: Invalid cell position (", row, ", ", col, ")")
+		return
+
+	# Calculate cell center position
+	# Grid starts at (50, 60) in panel coordinates
+	# Each cell is 100x126 px
+	var grid_offset = Vector2(50, 60)
+	var cell_size = Vector2(100, 126)
+	var cell_center = grid_offset + Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
+
+	entity.position = cell_center
+	print("Placed entity at cell (", row, ", ", col, ") -> position ", cell_center)
+
+func get_cell_from_entity_position(entity: Node2D) -> Vector2i:
+	"""Get the grid cell coordinates from an entity's position"""
+	var grid_offset = Vector2(50, 60)
+	var cell_size = Vector2(100, 126)
+
+	var relative_pos = entity.position - grid_offset
+	var col = int(relative_pos.x / cell_size.x)
+	var row = int(relative_pos.y / cell_size.y)
+
+	# Clamp to valid range
+	col = clamp(col, 0, GRID_COLS - 1)
+	row = clamp(row, 0, GRID_ROWS - 1)
+
+	return Vector2i(col, row)
 
 # Grid signal handlers
 func _on_cell_clicked(row: int, col: int):

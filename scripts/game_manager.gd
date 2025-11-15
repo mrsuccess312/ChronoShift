@@ -579,7 +579,11 @@ func update_after_carousel_slide_correct(state_for_past: Dictionary, first_turn:
 	timeline_panels[2].timeline_type = "present"
 	timeline_panels[3].timeline_type = "future"
 	timeline_panels[4].timeline_type = "decorative"
-	
+
+	# Update grid cell hover colors for all panels
+	for panel in timeline_panels:
+		panel.update_cell_hover_colors()
+
 	# Update Past with captured state
 	timeline_panels[1].state = state_for_past.duplicate(true)
 	
