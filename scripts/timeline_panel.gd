@@ -89,9 +89,13 @@ func _process(delta: float):
 			var normalized_x = clamp(relative_pos.x / (panel_rect.size.x / 2.0), -1.0, 1.0)
 			var normalized_y = clamp(relative_pos.y / (panel_rect.size.y / 2.0), -1.0, 1.0)
 
-			# Map to tilt angles (X movement tilts around Y axis, Y movement tilts around X axis)
-			target_tilt.x = -normalized_y * MAX_TILT_DEGREES  # Up/down tilt
-			target_tilt.y = normalized_x * MAX_TILT_DEGREES   # Left/right tilt
+			# PARALLAX EFFECT: Panel tilts TOWARD mouse position
+			# Mouse on right → panel tilts right (rotates clockwise)
+			# Mouse on left → panel tilts left (rotates counter-clockwise)
+			# Mouse on bottom → panel tilts down
+			# Mouse on top → panel tilts up
+			target_tilt.x = normalized_y * MAX_TILT_DEGREES  # Vertical tilt (up/down)
+			target_tilt.y = normalized_x * MAX_TILT_DEGREES  # Horizontal tilt (left/right)
 		else:
 			# Mouse not over panel, reset tilt
 			target_tilt = Vector2.ZERO
@@ -99,17 +103,26 @@ func _process(delta: float):
 		# Smooth interpolation to target tilt
 		current_tilt = current_tilt.lerp(target_tilt, TILT_TRANSITION_SPEED * delta)
 
-		# Apply tilt using skew for 2D perspective effect
-		# Skew simulates 3D rotation in 2D space
-		var tilt_skew_x = deg_to_rad(current_tilt.y) * 0.5  # Horizontal tilt affects horizontal skew
-		var tilt_skew_y = deg_to_rad(current_tilt.x) * 0.5  # Vertical tilt affects vertical skew
+		# Apply parallax tilt effect using rotation and transforms
+		# Primary rotation for left/right tilt
+		rotation_degrees = current_tilt.y * 0.3  # Subtle rotation around Z-axis
 
-		# Apply skew to panel
-		skew = tilt_skew_x
+		# Use skew for perspective distortion (simulates 3D rotation)
+		# When tilted right, compress right side; when tilted left, compress left side
+		var perspective_skew = deg_to_rad(current_tilt.y) * 0.15
+		skew = perspective_skew
 
-		# For vertical tilt, we can use scale to simulate perspective
-		var scale_y = 1.0 - abs(current_tilt.x) * 0.01  # Slight scale reduction when tilted up/down
-		scale.y = scale_y
+		# Scale adjustments for depth perception
+		# When tilted vertically, slightly compress the panel
+		var scale_x = 1.0 - abs(current_tilt.y) * 0.008
+		var scale_y = 1.0 - abs(current_tilt.x) * 0.012
+		scale = Vector2(scale_x, scale_y)
+	else:
+		# Reset transforms when tilt is disabled
+		rotation_degrees = 0.0
+		skew = 0.0
+		if not hover_enabled:  # Only reset scale if hover is also off
+			scale = Vector2.ONE
 
 	# === SHADOW UPDATE ===
 	if shadow:
@@ -125,16 +138,18 @@ func _process(delta: float):
 			var normalized_height = (current_hover_offset + hover_amplitude) / (hover_amplitude * 2.0)
 			shadow_opacity = lerp(0.2, 0.4, normalized_height)
 
-		# Adjust shadow based on tilt
+		# Adjust shadow based on tilt (PARALLAX EFFECT)
 		if tilt_enabled:
-			# Shadow moves based on tilt direction
-			shadow_x = 10.0 + current_tilt.y * TILT_SHADOW_OFFSET_MULTIPLIER
-			shadow_y += current_tilt.x * TILT_SHADOW_OFFSET_MULTIPLIER
-			# Increase shadow opacity slightly when tilted (more depth)
-			shadow_opacity += abs(current_tilt.length()) * 0.02
+			# Shadow moves OPPOSITE to tilt direction for parallax depth
+			# Panel tilts right → shadow moves left (negative offset)
+			# Panel tilts down → shadow moves up (negative offset)
+			shadow_x = 10.0 - current_tilt.y * TILT_SHADOW_OFFSET_MULTIPLIER
+			shadow_y += -current_tilt.x * TILT_SHADOW_OFFSET_MULTIPLIER
+			# Increase shadow opacity and blur effect when tilted (more depth)
+			shadow_opacity += abs(current_tilt.length()) * 0.025
 
 		shadow.position = Vector2(shadow_x, shadow_y)
-		shadow.modulate.a = clamp(shadow_opacity, 0.2, 0.5)
+		shadow.modulate.a = clamp(shadow_opacity, 0.15, 0.5)
 
 func start_hover_animation():
 	"""Enable hover animation for this panel"""
@@ -160,9 +175,10 @@ func enable_tilt_effect(enabled: bool):
 	tilt_enabled = enabled
 
 	if not enabled:
-		# Reset tilt immediately
+		# Reset all tilt transforms immediately
 		current_tilt = Vector2.ZERO
 		target_tilt = Vector2.ZERO
+		rotation_degrees = 0.0
 		skew = 0.0
 		scale = Vector2.ONE
 
