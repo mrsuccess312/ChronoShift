@@ -17,11 +17,27 @@ var grid_cells: Array = []  # 2D array [row][col] of grid cell nodes
 const GRID_ROWS: int = 5
 const GRID_COLS: int = 5
 
+# Hover animation
+var hover_enabled: bool = false
+var time_offset: float = 0.0  # Random phase offset for this panel
+var hover_amplitude: float = 9.0  # 8-10 pixels
+var hover_period: float = 3.5  # 3-4 seconds
+var base_position_y: float = 0.0  # Original Y position
+var current_hover_offset: float = 0.0
+
 @onready var grid_container: Control = $GridContainer
+@onready var shadow: ColorRect = $Shadow
 
 func _ready():
 	"""Setup grid when panel is added to scene"""
 	print("TimelinePanel _ready() called for ", timeline_type)
+
+	# Store base position for hover animation
+	base_position_y = position.y
+
+	# Set random time offset for unique phase (0 to 2*PI)
+	time_offset = randf() * TAU
+
 	setup_grid()
 	# Update hover colors after grid is set up
 	update_cell_hover_colors()
@@ -32,6 +48,49 @@ func initialize(type: String, slot: int):
 	timeline_type = type
 	slot_index = slot
 	update_cell_hover_colors()
+
+func _process(delta: float):
+	"""Handle hover animation each frame"""
+	if not hover_enabled:
+		return
+
+	# Calculate sine wave for smooth oscillation
+	var time = Time.get_ticks_msec() / 1000.0  # Convert to seconds
+	var sine_value = sin((time / hover_period) * TAU + time_offset)
+	current_hover_offset = sine_value * hover_amplitude
+
+	# Apply vertical offset to panel
+	position.y = base_position_y + current_hover_offset
+
+	# Update shadow position (moves opposite to panel)
+	if shadow:
+		# Shadow moves down when panel moves up, and vice versa
+		shadow.position.y = 10.0 - current_hover_offset
+
+		# Shadow opacity increases when panel is higher (looks more elevated)
+		# Map hover offset (-amplitude to +amplitude) to opacity (0.2 to 0.4)
+		var normalized_height = (current_hover_offset + hover_amplitude) / (hover_amplitude * 2.0)
+		var shadow_opacity = lerp(0.2, 0.4, normalized_height)
+		shadow.modulate.a = shadow_opacity
+
+func start_hover_animation():
+	"""Enable hover animation for this panel"""
+	hover_enabled = true
+	base_position_y = position.y  # Update base position in case it changed
+	print("  Hover animation started for ", timeline_type, " panel")
+
+func stop_hover_animation():
+	"""Disable hover animation and reset to base position"""
+	hover_enabled = false
+	position.y = base_position_y
+	current_hover_offset = 0.0
+
+	# Reset shadow to default
+	if shadow:
+		shadow.position.y = 10.0
+		shadow.modulate.a = 0.3
+
+	print("  Hover animation stopped for ", timeline_type, " panel")
 
 func update_cell_hover_colors():
 	"""Update hover colors for all cells based on current timeline type"""
