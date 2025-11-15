@@ -1300,11 +1300,13 @@ func rotate_timeline_panels_7():
 	old_slot_0.timeline_type = "decorative"
 	old_slot_0.slot_index = 5
 
-	if old_slot_0 != null:
-		apply_carousel_position(old_slot_0, 5)
-
+	# Update slot_index for all panels
 	for i in range(timeline_panels.size()):
 		timeline_panels[i].slot_index = i
+
+	# Re-apply carousel positions to ALL panels to update z_indices
+	for i in range(timeline_panels.size()):
+		apply_carousel_position(timeline_panels[i], i)
 
 	print("✅ Rotated! Array size: ", timeline_panels.size())
 
