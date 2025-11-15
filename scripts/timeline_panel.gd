@@ -22,6 +22,8 @@ const GRID_COLS: int = 5
 func _ready():
 	"""Setup grid when panel is added to scene"""
 	setup_grid()
+	# Update hover colors after grid is set up
+	update_cell_hover_colors()
 
 func initialize(type: String, slot: int):
 	"""Initialize the timeline panel with type and slot index"""
@@ -31,6 +33,10 @@ func initialize(type: String, slot: int):
 
 func update_cell_hover_colors():
 	"""Update hover colors for all cells based on current timeline type"""
+	# Safety check: only update if grid is set up
+	if grid_cells.is_empty():
+		return
+
 	var hover_color = get_timeline_hover_color()
 	for row in range(GRID_ROWS):
 		for col in range(GRID_COLS):
