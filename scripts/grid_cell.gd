@@ -52,11 +52,13 @@ func set_hover_color(color: Color):
 func _on_mouse_entered():
 	"""Handle mouse entering cell with smooth fade-in"""
 	is_hovered = true
+	print("DEBUG: Mouse entered cell (", row, ", ", col, ")")
 
 	# Fade in highlight
 	if highlight:
 		highlight.color = hover_color
 		highlight.visible = true
+		print("DEBUG: Highlight visible, color = ", hover_color)
 
 		var tween = create_tween()
 		tween.tween_property(highlight, "modulate:a", 0.3, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -79,6 +81,7 @@ func _on_mouse_exited():
 func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int):
 	"""Handle mouse click on cell with pulse animation"""
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		print("DEBUG: Cell clicked (", row, ", ", col, ")")
 		# Play click pulse animation
 		play_click_animation()
 		cell_clicked.emit(row, col)

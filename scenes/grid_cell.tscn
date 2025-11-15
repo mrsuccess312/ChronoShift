@@ -6,6 +6,7 @@
 size = Vector2(100, 126)
 
 [node name="GridCell" type="Area2D"]
+input_pickable = true
 script = ExtResource("1_gridcell")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
@@ -15,6 +16,7 @@ shape = SubResource("RectangleShape2D_cell")
 [node name="Highlight" type="ColorRect" parent="."]
 offset_right = 100.0
 offset_bottom = 126.0
+mouse_filter = 2
 color = Color(1, 1, 1, 0.3)
 
 [node name="GridLines" type="Control" parent="."]
