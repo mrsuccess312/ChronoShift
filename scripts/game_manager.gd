@@ -162,7 +162,7 @@ func setup_carousel():
 		panel.initialize(panel_types[i], i)
 
 		# Apply styling based on type
-		apply_panel_styling(panel, panel_types[i])
+		apply_panel_styling(panel, panel_types[i], i)
 
 		# Add to carousel container
 		carousel_container.add_child(panel)
@@ -182,7 +182,7 @@ func setup_carousel():
 	build_carousel_snapshot()
 	print("✅ Carousel initialized with ", timeline_panels.size(), " panels")
 
-func apply_panel_styling(panel: Panel, timeline_type: String):
+func apply_panel_styling(panel: Panel, timeline_type: String, i: int):
 	"""Apply visual styling to panel based on timeline type"""
 	var stylebox = StyleBoxFlat.new()
 	stylebox.border_width_left = 2
@@ -190,23 +190,26 @@ func apply_panel_styling(panel: Panel, timeline_type: String):
 	stylebox.border_width_right = 2
 	stylebox.border_width_bottom = 2
 
-	match timeline_type:
-		"past":
-			stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
-			stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
-			update_panel_label_text(panel, "⟲ PAST")
-		"present":
-			stylebox.bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
-			stylebox.border_color = Color(0.2901961, 0.61960787, 1, 1)
-			update_panel_label_text(panel, "◉ PRESENT")
-		"future":
-			stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
-			stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
-			update_panel_label_text(panel, "⟳ FUTURE")
-		"decorative":
-			stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
-			stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
-			update_panel_label_text(panel, "")
+	if timeline_type == "past":
+		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		update_panel_label_text(panel, "⟲ PAST")
+	if timeline_type == "present":
+		stylebox.bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+		stylebox.border_color = Color(0.2901961, 0.61960787, 1, 1)
+		update_panel_label_text(panel, "◉ PRESENT")
+	if timeline_type == "future":
+		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+		update_panel_label_text(panel, "⟳ FUTURE")
+	if timeline_type == "decorative" and i == 0:
+		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		update_panel_label_text(panel, "")
+	if timeline_type == "decorative" and i > 3:
+		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+		update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
 
