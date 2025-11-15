@@ -222,27 +222,20 @@ func update_panel_label_text(panel: Panel, text: String):
 		panel.get_node("PanelLabel").text = text
 
 func update_panel_mouse_filters():
-	"""Set mouse filters so only topmost panel blocks input to lower panels"""
-	# Find the panel with highest z_index
-	var topmost_panel = null
-	var highest_z = -999
+	"""Enable grids only on panels with z_index > 0"""
+	print("🔧 Updating panel interactivity based on z_index...")
 
 	for panel in timeline_panels:
-		if panel.z_index > highest_z:
-			highest_z = panel.z_index
-			topmost_panel = panel
-
-	# Set filters
-	for panel in timeline_panels:
-		if panel == topmost_panel:
-			# Topmost panel STOPS mouse events from reaching panels below
-			# But still passes events to its own children (grid cells)
-			panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Value 0
-			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") set to STOP (topmost)")
+		if panel.z_index > 0:
+			# Panel is visible and should be interactive
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Block input to lower panels
+			panel.set_grid_interactive(true)  # Enable grid cells
+			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - INTERACTIVE")
 		else:
-			# Lower panels IGNORE mouse events (they won't receive them anyway)
-			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Value 2
-			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") set to IGNORE")
+			# Panel is decorative/background (z <= 0) - should not be interactive
+			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Ignore input
+			panel.set_grid_interactive(false)  # Disable grid cells
+			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - NON-INTERACTIVE")
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""

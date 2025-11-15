@@ -196,3 +196,13 @@ func _on_cell_hovered(row: int, col: int):
 func _on_cell_exited(row: int, col: int):
 	"""Handle cell hover exit"""
 	pass  # Can be used to clear hover effects
+
+func set_grid_interactive(enabled: bool):
+	"""Enable or disable grid cell interactivity"""
+	for row in range(GRID_ROWS):
+		for col in range(GRID_COLS):
+			var cell = grid_cells[row][col]
+			if cell:
+				cell.input_pickable = enabled
+				cell.monitoring = enabled
+	print("  Grid interactive for ", timeline_type, " panel: ", enabled)
