@@ -228,12 +228,10 @@ func update_panel_mouse_filters():
 	for panel in timeline_panels:
 		if panel.z_index > 0:
 			# Panel is visible and should be interactive
-			panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Block input to lower panels
 			panel.set_grid_interactive(true)  # Enable grid cells
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - INTERACTIVE")
 		else:
 			# Panel is decorative/background (z <= 0) - should not be interactive
-			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Ignore input
 			panel.set_grid_interactive(false)  # Disable grid cells
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - NON-INTERACTIVE")
 
