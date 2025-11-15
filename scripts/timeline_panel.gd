@@ -21,9 +21,11 @@ const GRID_COLS: int = 5
 
 func _ready():
 	"""Setup grid when panel is added to scene"""
+	print("TimelinePanel _ready() called for ", timeline_type)
 	setup_grid()
 	# Update hover colors after grid is set up
 	update_cell_hover_colors()
+	print("TimelinePanel _ready() complete - grid has ", grid_cells.size(), " rows")
 
 func initialize(type: String, slot: int):
 	"""Initialize the timeline panel with type and slot index"""
@@ -67,7 +69,11 @@ func clear_all():
 
 func setup_grid():
 	"""Create 5x5 grid of cells"""
+	print("DEBUG setup_grid: Starting for ", timeline_type)
+	print("DEBUG setup_grid: grid_container = ", grid_container)
+
 	if not grid_container:
+		print("DEBUG setup_grid: grid_container is null! Aborting.")
 		return
 
 	# Initialize 2D array for grid cells
@@ -77,6 +83,8 @@ func setup_grid():
 		for col in range(GRID_COLS):
 			row_array.append(null)
 		grid_cells.append(row_array)
+
+	print("DEBUG setup_grid: Creating ", GRID_ROWS * GRID_COLS, " cells...")
 
 	# Create grid cells
 	for row in range(GRID_ROWS):
@@ -97,6 +105,8 @@ func setup_grid():
 
 			grid_container.add_child(cell)
 			grid_cells[row][col] = cell
+
+	print("DEBUG setup_grid: Created all cells. Total children in grid_container: ", grid_container.get_child_count())
 
 func get_timeline_hover_color() -> Color:
 	"""Get hover color based on timeline type"""

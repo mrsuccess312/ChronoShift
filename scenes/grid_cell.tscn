@@ -7,6 +7,8 @@ size = Vector2(100, 126)
 
 [node name="GridCell" type="Area2D"]
 input_pickable = true
+monitoring = true
+monitorable = true
 script = ExtResource("1_gridcell")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]

@@ -18,10 +18,19 @@ var hover_color: Color = Color(1, 1, 1, 0.3)  # Default hover color
 @onready var debug_label: Label = $DebugLabel
 
 func _ready():
+	print("DEBUG GridCell _ready: Cell (", row, ", ", col, ") initializing")
+
+	# Enable monitoring
+	monitoring = true
+	monitorable = true
+
 	# Connect mouse signals
 	mouse_entered.connect(_on_mouse_entered)
 	mouse_exited.connect(_on_mouse_exited)
 	input_event.connect(_on_input_event)
+
+	print("DEBUG GridCell _ready: Signals connected for (", row, ", ", col, ")")
+	print("DEBUG GridCell _ready: input_pickable = ", input_pickable, ", monitoring = ", monitoring)
 
 	# Hide highlight by default
 	if highlight:
@@ -35,6 +44,8 @@ func _ready():
 	# Hide debug label by default
 	if debug_label:
 		debug_label.visible = false
+
+	print("DEBUG GridCell _ready: Complete for (", row, ", ", col, ")")
 
 func initialize(grid_row: int, grid_col: int):
 	"""Initialize cell with grid coordinates"""
