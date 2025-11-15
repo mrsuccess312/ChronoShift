@@ -97,8 +97,8 @@ func setup_grid():
 			cell.cell_hovered.connect(_on_cell_hovered)
 			cell.cell_exited.connect(_on_cell_exited)
 
-			# Position cell (100px wide, 126px tall per cell)
-			cell.position = Vector2(col * 100, row * 126)
+			# Position cell (120px wide, 150px tall per cell)
+			cell.position = Vector2(col * 120, row * 150)
 
 			# Set timeline-appropriate hover color
 			cell.set_hover_color(get_timeline_hover_color())
@@ -163,23 +163,20 @@ func place_entity_at_cell(entity: Node2D, row: int, col: int):
 		return
 
 	# Calculate cell center position
-	# Grid starts at (50, 60) in panel coordinates
-	# Each cell is 100x126 px
-	var grid_offset = Vector2(50, 60)
-	var cell_size = Vector2(100, 126)
-	var cell_center = grid_offset + Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
+	# Grid now covers full panel (600x750)
+	# Each cell is 120x150 px
+	var cell_size = Vector2(120, 150)
+	var cell_center = Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
 
 	entity.position = cell_center
 	print("Placed entity at cell (", row, ", ", col, ") -> position ", cell_center)
 
 func get_cell_from_entity_position(entity: Node2D) -> Vector2i:
 	"""Get the grid cell coordinates from an entity's position"""
-	var grid_offset = Vector2(50, 60)
-	var cell_size = Vector2(100, 126)
+	var cell_size = Vector2(120, 150)
 
-	var relative_pos = entity.position - grid_offset
-	var col = int(relative_pos.x / cell_size.x)
-	var row = int(relative_pos.y / cell_size.y)
+	var col = int(entity.position.x / cell_size.x)
+	var row = int(entity.position.y / cell_size.y)
 
 	# Clamp to valid range
 	col = clamp(col, 0, GRID_COLS - 1)
