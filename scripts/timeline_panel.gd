@@ -20,8 +20,8 @@ const GRID_COLS: int = 5
 # Hover animation
 var hover_enabled: bool = false
 var time_offset: float = 0.0  # Random phase offset for this panel
-var hover_amplitude: float = 9.0  # 8-10 pixels
-var hover_period: float = 3.5  # 3-4 seconds
+var hover_amplitude: float = 6.0  # 8-10 pixels
+var hover_period: float = 2.5  # 3-4 seconds
 var base_position_y: float = 0.0  # Original Y position
 var current_hover_offset: float = 0.0
 

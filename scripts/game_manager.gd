@@ -229,13 +229,12 @@ func update_panel_mouse_filters():
 		if panel.z_index > 0:
 			# Panel is visible and should be interactive
 			panel.set_grid_interactive(true)  # Enable grid cells
-			panel.start_hover_animation()  # Enable hover animation
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - INTERACTIVE")
 		else:
 			# Panel is decorative/background (z <= 0) - should not be interactive
 			panel.set_grid_interactive(false)  # Disable grid cells
-			panel.stop_hover_animation()  # Disable hover animation
 			print("  Panel ", panel.timeline_type, " (z=", panel.z_index, ") - NON-INTERACTIVE")
+		panel.start_hover_animation()
 
 func build_carousel_snapshot():
 	"""Build snapshot of target states for all 6 carousel positions"""
