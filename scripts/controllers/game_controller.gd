@@ -249,7 +249,7 @@ func _disable_all_input() -> void:
 
 	# Disable card interaction
 	if card_manager:
-		for deck in [card_manager.deck_left, card_manager.deck_right]:
+		for deck in [card_manager.past_deck, card_manager.present_deck, card_manager.future_deck]:
 			if deck:
 				for card_node in deck.card_nodes:
 					if card_node and is_instance_valid(card_node):
@@ -270,7 +270,7 @@ func _enable_all_input() -> void:
 
 	# Re-enable card interaction
 	if card_manager:
-		for deck in [card_manager.deck_left, card_manager.deck_right]:
+		for deck in [card_manager.past_deck, card_manager.present_deck, card_manager.future_deck]:
 			if deck:
 				var top_card = deck.get_top_card()
 				if top_card and is_instance_valid(top_card):
