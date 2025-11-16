@@ -1968,6 +1968,8 @@ func card_requires_targeting(card_data: Dictionary) -> bool:
 			return true  # Select source enemy and target
 		CardDatabase.EffectType.WOUND_TRANSFER:
 			return true  # Select which enemy to transfer wounds from
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			return true  # Select enemy in PAST to swap with player
 		_:
 			return false
 
@@ -1984,6 +1986,8 @@ func get_required_target_count(card_data: Dictionary) -> int:
 			return 2  # Source enemy and target enemy
 		CardDatabase.EffectType.WOUND_TRANSFER:
 			return 1  # One enemy
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			return 1  # One enemy in PAST
 		_:
 			return 0
 
@@ -2116,7 +2120,7 @@ func highlight_valid_targets_for_card(card_data: Dictionary):
 	"""Highlight valid targets based on card effect type"""
 	var effect_type = card_data.get("effect_type")
 	var present_tp = get_timeline_panel("present")
-	var future_tp = get_timeline_panel("future")
+	var past_tp = get_timeline_panel("past")
 
 	match effect_type:
 		CardDatabase.EffectType.DAMAGE_ENEMY:
@@ -2138,10 +2142,18 @@ func highlight_valid_targets_for_card(card_data: Dictionary):
 					entity.show_as_valid_target()
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
-			# Highlight all enemies in Present
-			for entity in present_tp.entities:
-				if not entity.is_player:
-					entity.show_as_valid_target()
+			# Highlight all enemies in PAST
+			if past_tp and not past_tp.state.is_empty():
+				for entity in past_tp.entities:
+					if not entity.is_player:
+						entity.show_as_valid_target()
+
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			# Highlight all enemies in PAST
+			if past_tp and not past_tp.state.is_empty():
+				for entity in past_tp.entities:
+					if not entity.is_player:
+						entity.show_as_valid_target()
 
 func clear_all_target_highlights():
 	"""Clear all target highlights from all panels"""
@@ -2153,10 +2165,12 @@ func clear_all_target_highlights():
 
 func enable_entity_targeting():
 	"""Enable clicking on entities for targeting"""
-	var present_tp = get_timeline_panel("present")
-	for entity in present_tp.entities:
-		if is_instance_valid(entity) and not entity.is_player:
-			entity.enable_targeting(self)
+	# Enable targeting on all entities across all timelines
+	# (only highlighted ones will be visibly clickable)
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity) and not entity.is_player:
+				entity.enable_targeting(self)
 
 func disable_entity_targeting():
 	"""Disable clicking on entities"""
@@ -2251,6 +2265,26 @@ func apply_card_effect_with_targets(card_data: Dictionary, targets: Array):
 										present_tp.state["enemies"].remove_at(i)
 								break
 						break
+
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			# Conscript enemy from PAST to fight for you
+			var past_tp = get_timeline_panel("past")
+			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
+				var target_entity = targets[0]
+				var conscripted_data = target_entity.entity_data.duplicate()
+				conscripted_data["name"] = "Conscripted " + conscripted_data["name"]
+
+				print("Conscripted ", conscripted_data["name"], " to fight for you")
+
+				# Conscripted enemy attacks leftmost enemy in Present
+				if present_tp.state["enemies"].size() > 0:
+					var damage = conscripted_data.get("damage", 0)
+					present_tp.state["enemies"][0]["hp"] -= damage
+					print("  Conscripted enemy deals ", damage, " damage to ", present_tp.state["enemies"][0]["name"])
+
+					if present_tp.state["enemies"][0]["hp"] <= 0:
+						print("  Enemy defeated by conscripted ally!")
+						present_tp.state["enemies"].remove_at(0)
 
 func handle_game_over():
 	"""Handle player death - disable all inputs"""
