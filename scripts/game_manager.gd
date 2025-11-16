@@ -476,10 +476,15 @@ func create_timeline_entities(tp: Panel):
 	# Create twin entity if it exists
 	if tp.state.has("twin"):
 		var twin_entity = ENTITY_SCENE.instantiate()
-		twin_entity.setup(tp.state["twin"], true, tp.timeline_type)  # is_player=true for orange color
+		twin_entity.setup(tp.state["twin"], true, tp.timeline_type)  # is_player=true for similar visual
 
-		# Find nearest empty cell to the left of player
-		var twin_grid_pos = find_empty_cell_left_of_player(tp, player_grid_pos, enemy_count)
+		# Place twin directly to the left of player (same row, col-1)
+		var twin_grid_pos = Vector2i(player_grid_pos.x, player_grid_pos.y - 1)
+
+		# Ensure twin is within grid bounds
+		if twin_grid_pos.y < 0:
+			twin_grid_pos.y = 0  # Can't go further left, place at leftmost column
+
 		var world_pos = tp.get_cell_center_position(twin_grid_pos.x, twin_grid_pos.y)
 
 		twin_entity.position = world_pos
@@ -520,14 +525,17 @@ func create_timeline_arrows(tp: Panel):
 			print("  Created enemy → player arrows")
 
 func create_player_attack_arrows(tp: Panel):
-	"""Create arrow from player to leftmost enemy (grid-based targeting)"""
+	"""Create arrows from player and twin to leftmost enemy (grid-based targeting)"""
 	var player_entity = null
+	var twin_entity = null
 
-	# Find player entity
+	# Find player and twin entities
 	for entity in tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
 
 	if not player_entity:
 		return
@@ -535,7 +543,11 @@ func create_player_attack_arrows(tp: Panel):
 	# Get leftmost enemy using grid-based targeting
 	var target_enemy = tp.get_leftmost_enemy()
 
-	if player_entity and target_enemy:
+	if not target_enemy:
+		return
+
+	# Create arrow from player to enemy
+	if player_entity:
 		var arrow = ARROW_SCENE.instantiate()
 		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
 		arrow.z_as_relative = true
@@ -546,22 +558,46 @@ func create_player_attack_arrows(tp: Panel):
 
 		tp.arrows.append(arrow)
 
+	# Create arrow from twin to enemy (if twin exists)
+	if twin_entity:
+		var twin_arrow = ARROW_SCENE.instantiate()
+		twin_arrow.z_index = 50
+		twin_arrow.z_as_relative = true
+		tp.add_child(twin_arrow)
+
+		var twin_curve = calculate_smart_curve(twin_entity.position, target_enemy.position)
+		twin_arrow.setup(twin_entity.position, target_enemy.position, twin_curve)
+
+		tp.arrows.append(twin_arrow)
+		print("  Created twin → enemy arrow")
+
 func create_enemy_attack_arrows(tp: Panel):
-	"""Create arrows from each enemy to player (or to other enemies if redirected)"""
+	"""Create arrows from each enemy to player/twin (or to other enemies if redirected)"""
 	var player_entity = null
+	var twin_entity = null
+
+	# Find player and twin entities
 	for entity in tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
 
 	if not player_entity:
 		return
+
+	# Determine default target: twin first (leftmost), then player
+	var default_target = twin_entity if twin_entity else player_entity
 
 	# Get enemy entities
 	var enemy_entities = []
 	for entity in tp.entities:
 		if not entity.is_player:
 			enemy_entities.append(entity)
+
+	# Track if twin is still alive for sequential targeting
+	var twin_alive = (twin_entity != null)
 
 	# Create arrows based on redirect/miss flags
 	for i in range(enemy_entities.size()):
@@ -573,22 +609,36 @@ func create_enemy_attack_arrows(tp: Panel):
 			continue
 
 		# Check if this enemy's attack is redirected
-		var target = player_entity
+		var target = null
 		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
 			var to_index = future_redirect_flag.get("to_enemy", -1)
 			if to_index >= 0 and to_index < enemy_entities.size():
 				target = enemy_entities[to_index]
 				print("  Enemy ", i, " arrow redirected to enemy ", to_index)
+		else:
+			# Target twin first, then player when twin dies
+			if twin_alive:
+				target = twin_entity
+				# Check if twin would die from this attack (based on state)
+				if tp.state.has("twin"):
+					var twin_hp = tp.state["twin"]["hp"]
+					var enemy_damage = enemy.entity_data.get("damage", 0)
+					if twin_hp <= enemy_damage:
+						# Twin will die, next enemies target player
+						twin_alive = false
+			else:
+				target = player_entity
 
-		var arrow = ARROW_SCENE.instantiate()
-		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
-		arrow.z_as_relative = true
-		tp.add_child(arrow)
+		if target:
+			var arrow = ARROW_SCENE.instantiate()
+			arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
+			arrow.z_as_relative = true
+			tp.add_child(arrow)
 
-		var curve = calculate_smart_curve(enemy.position, target.position)
-		arrow.setup(enemy.position, target.position, curve)
+			var curve = calculate_smart_curve(enemy.position, target.position)
+			arrow.setup(enemy.position, target.position, curve)
 
-		tp.arrows.append(arrow)
+			tp.arrows.append(arrow)
 
 func calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 	"""Calculate arrow curve based on spatial relationship"""
@@ -1333,6 +1383,9 @@ func reset_turn_effects():
 	if past_tp and past_tp.state.has("twin"):
 		print("  Removing twin from PAST after combat")
 		past_tp.state.erase("twin")
+		# Update PAST visuals to remove twin entity
+		create_timeline_entities(past_tp)
+		create_timeline_arrows(past_tp)
 
 	# Clear Future manipulation flags
 	future_miss_flags.clear()
@@ -1754,24 +1807,30 @@ func execute_combat_animations():
 	# Track if any enemy died during combat
 	var enemies_before = present_tp.state.get("enemies", []).size()
 	
+	# Twin attacks first (leftmost entity)
+	if present_tp.state.has("twin"):
+		print("  ⚔️ Twin attacking...")
+		await animate_twin_attack()
+		await get_tree().create_timer(0.2).timeout
+
 	# Player attacks
 	print("  ⚔️ Player attacking...")
 	await animate_player_attack()
-	
+
 	await get_tree().create_timer(0.2).timeout
-	
+
 	# Check if enemy died
 	var enemies_after_player = present_tp.state.get("enemies", []).size()
 	var enemy_died_during_player_attack = enemies_after_player < enemies_before
-	
+
 	# Enemies attack (if any left)
 	if present_tp.state.get("enemies", []).size() > 0:
 		print("  ⚔️ Enemies attacking...")
 		await animate_enemy_attacks()
-	
+
 	print("  ✅ Combat complete!")
 	print("    Player HP after: ", present_tp.state.get("player", {}).get("hp", 0))
-	
+
 	# NOW reposition enemies if any died during combat
 	if enemy_died_during_player_attack:
 		print("  ↔️ Enemy died during combat - repositioning remaining enemies...")
@@ -1854,22 +1913,102 @@ func animate_player_attack() -> void:
 	
 	print("  Player attack complete!")
 
+func animate_twin_attack() -> void:
+	"""Animate twin attacking leftmost enemy in Present"""
+	var present_tp = timeline_panels[2]
+
+	# Find twin and target enemy
+	var twin_entity = null
+	var target_enemy = null
+
+	for entity in present_tp.entities:
+		if entity.is_player and entity.entity_data.get("is_twin", false):
+			twin_entity = entity
+		elif target_enemy == null and not entity.is_player:
+			target_enemy = entity
+
+	if not twin_entity or not target_enemy:
+		print("  Cannot animate - missing twin or enemy")
+		return
+
+	# Store original position
+	var original_pos = twin_entity.position
+	var target_pos = target_enemy.position
+
+	# Calculate attack position
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0
+
+	print("  Twin attack animation starting...")
+
+	# Dash to enemy
+	var tween = create_tween()
+	tween.tween_property(twin_entity, "position", attack_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await tween.finished
+
+	# APPLY DAMAGE AT IMPACT
+	if present_tp.state["enemies"].size() > 0 and present_tp.state.has("twin"):
+		var target_enemy_data = present_tp.state["enemies"][0]
+		var damage = present_tp.state["twin"]["damage"]
+		target_enemy_data["hp"] -= damage
+		print("  Twin dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
+
+		# Play attack sound
+		twin_entity.play_attack_sound()
+
+		# Screen shake
+		apply_screen_shake(damage * 0.5)
+
+		# Hit reaction
+		var hit_direction = (target_enemy.position - twin_entity.position).normalized()
+		target_enemy.play_hit_reaction(hit_direction)
+
+		# Update visual
+		target_enemy.entity_data = target_enemy_data
+		target_enemy.update_display()
+
+		# Remove enemy if dead
+		if target_enemy_data["hp"] <= 0:
+			print("  ", target_enemy_data["name"], " defeated by twin!")
+			present_tp.state["enemies"].remove_at(0)
+			present_tp.entities.erase(target_enemy)
+			target_enemy.visible = false
+
+			# Queue for deletion
+			get_tree().create_timer(1.5).timeout.connect(func():
+				if is_instance_valid(target_enemy):
+					target_enemy.queue_free()
+			)
+
+	# Pause at enemy
+	await get_tree().create_timer(0.1).timeout
+
+	# Dash back
+	var tween2 = create_tween()
+	tween2.tween_property(twin_entity, "position", original_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+
+	print("  Twin attack complete!")
+
 
 func animate_enemy_attacks() -> void:
-	"""Animate all enemies attacking player sequentially"""
+	"""Animate all enemies attacking twin/player sequentially"""
 	var present_tp = timeline_panels[2]
-	
-	# Find player
+
+	# Find player and twin
 	var player_entity = null
+	var twin_entity = null
 	for entity in present_tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
-	
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
+
 	if not player_entity:
 		print("  Cannot animate - missing player")
 		return
-	
+
 	# Get all enemies with data
 	var enemy_list = []
 	for i in range(present_tp.state["enemies"].size()):
@@ -1878,60 +2017,97 @@ func animate_enemy_attacks() -> void:
 			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
 				enemy_list.append({"node": entity, "data": enemy_data, "index": i})
 				break
-	
+
 	if enemy_list.size() == 0:
 		return
-	
+
 	print("  Enemy attacks starting...")
-	
+
+	# Track if twin is still alive
+	var twin_alive = (twin_entity != null and present_tp.state.has("twin"))
+
 	# Animate each enemy sequentially
 	for enemy_info in enemy_list:
 		var enemy_index = enemy_info["index"]
-		
+
 		# CHECK MISS FLAGS
 		if future_miss_flags.get(enemy_index, false):
 			print("  Enemy ", enemy_index, " misses (Chaos Injection effect)")
 			continue
-		
+
+		# Determine target: twin first, then player
+		var target = null
+		var target_is_twin = false
+
 		# CHECK REDIRECT
-		var target = player_entity
 		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == enemy_index:
 			var to_index = future_redirect_flag.get("to_enemy", -1)
 			if to_index >= 0 and to_index < enemy_list.size():
 				target = enemy_list[to_index]["node"]
 				print("  Enemy ", enemy_index, " attacks enemy ", to_index, " (Redirect effect)")
-		
-		await animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"])
-	
+		else:
+			# Target twin first (leftmost), then player
+			if twin_alive:
+				target = twin_entity
+				target_is_twin = true
+			else:
+				target = player_entity
+
+		await animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"], target_is_twin)
+
+		# Check if twin died from this attack
+		if target_is_twin and present_tp.state.has("twin"):
+			if present_tp.state["twin"]["hp"] <= 0:
+				print("  Twin defeated! Remaining enemies will attack player.")
+				twin_alive = false
+				# Remove twin from entities
+				if twin_entity and is_instance_valid(twin_entity):
+					present_tp.entities.erase(twin_entity)
+					twin_entity.visible = false
+					get_tree().create_timer(1.0).timeout.connect(func():
+						if is_instance_valid(twin_entity):
+							twin_entity.queue_free()
+					)
+				twin_entity = null
+
 	print("  All enemy attacks complete!")
 
 
-func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary) -> void:
-	"""Animate single enemy attacking target (player or another enemy)"""
+func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary, target_is_twin: bool = false) -> void:
+	"""Animate single enemy attacking target (player, twin, or another enemy)"""
 	var present_tp = timeline_panels[2]
-	
+
 	var original_pos = enemy.position
 	var target_pos = target.position
 	var direction = (target_pos - original_pos).normalized()
 	var attack_pos = target_pos - direction * 50.0
-	
+
 	# Dash to target
 	var tween = create_tween()
 	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await tween.finished
-	
+
 	# APPLY DAMAGE AT IMPACT
 	var damage = enemy_data["damage"]
-	
-	# Check if target is player or enemy
+
+	# Check if target is player, twin, or enemy
 	if target.is_player:
-		# Attacking player
-		present_tp.state["player"]["hp"] -= damage
-		print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
-		
-		# Update player visual
-		target.entity_data = present_tp.state["player"]
-		target.update_display()
+		if target_is_twin:
+			# Attacking twin
+			present_tp.state["twin"]["hp"] -= damage
+			print("  ", enemy_data["name"], " dealt ", damage, " damage to twin! Twin HP: ", present_tp.state["twin"]["hp"])
+
+			# Update twin visual
+			target.entity_data = present_tp.state["twin"]
+			target.update_display()
+		else:
+			# Attacking player
+			present_tp.state["player"]["hp"] -= damage
+			print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
+
+			# Update player visual
+			target.entity_data = present_tp.state["player"]
+			target.update_display()
 	else:
 		# Attacking another enemy (redirect)
 		# Find target enemy in state
@@ -1939,11 +2115,11 @@ func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dict
 			if enemy_state["name"] == target.entity_data["name"]:
 				enemy_state["hp"] -= damage
 				print("  ", enemy_data["name"], " dealt ", damage, " damage to ", enemy_state["name"], "! Enemy HP: ", enemy_state["hp"])
-				
+
 				# Update enemy visual
 				target.entity_data = enemy_state
 				target.update_display()
-				
+
 				# Remove if dead
 				if enemy_state["hp"] <= 0:
 					print("  ", enemy_state["name"], " defeated by redirect!")
