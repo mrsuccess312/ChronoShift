@@ -142,6 +142,10 @@ var carousel_snapshot = []
 @onready var present_deck_container = $UIRoot/DeckContainers/PresentDeckContainer
 @onready var future_deck_container = $UIRoot/DeckContainers/FutureDeckContainer
 @onready var camera = $Camera2D
+@onready var ui_root = $UIRoot
+
+# Targeting status label (created dynamically)
+var targeting_status_label: Label = null
 
 
 # ===== INITIALIZATION =====
@@ -149,9 +153,10 @@ var carousel_snapshot = []
 func _ready():
 	print("ChronoShift - Game Manager Ready!")
 	play_button.pressed.connect(_on_play_button_pressed)
-	
+
 	setup_carousel()
 	initialize_game()
+	create_targeting_status_label()
 
 func _input(event):
 	"""Handle global input events"""
@@ -954,6 +959,40 @@ func update_timer_display():
 		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Orange/yellow
 	else:
 		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Default yellow
+
+func create_targeting_status_label():
+	"""Create the targeting status label UI element"""
+	targeting_status_label = Label.new()
+	targeting_status_label.name = "TargetingStatusLabel"
+	targeting_status_label.visible = false
+
+	# Style the label
+	targeting_status_label.add_theme_font_size_override("font_size", 32)
+	targeting_status_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	targeting_status_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+	targeting_status_label.add_theme_constant_override("outline_size", 3)
+
+	# Position at top center
+	targeting_status_label.anchor_left = 0.5
+	targeting_status_label.anchor_top = 0.1
+	targeting_status_label.anchor_right = 0.5
+	targeting_status_label.anchor_bottom = 0.1
+	targeting_status_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	targeting_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	ui_root.add_child(targeting_status_label)
+	print("Targeting status label created")
+
+func show_targeting_status(current: int, total: int, card_name: String):
+	"""Show and update the targeting status label"""
+	if targeting_status_label:
+		targeting_status_label.text = "%s: Select %d/%d targets" % [card_name, current, total]
+		targeting_status_label.visible = true
+
+func hide_targeting_status():
+	"""Hide the targeting status label"""
+	if targeting_status_label:
+		targeting_status_label.visible = false
 
 
 # ===== CARD SYSTEM =====
@@ -2354,6 +2393,9 @@ func enter_targeting_mode(card_data: Dictionary, card_node: Node, source_deck: C
 	# Enable entity targeting
 	enable_entity_targeting()
 
+	# Show targeting status UI
+	show_targeting_status(0, required_target_count, card_data.get("name", "Unknown"))
+
 	print("  Required targets: ", required_target_count)
 	print("  ✅ Targeting mode active")
 
@@ -2367,17 +2409,26 @@ func cancel_targeting_mode():
 	targeting_mode_active = false
 	selected_targets = []
 
-	# Restore card visual states
+	# Restore card visual states (but keep selected card highlighted until it's used)
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
-			top_card.exit_targeting_mode()
+			# Keep the selected card highlighted, restore others
+			if top_card == targeting_card_node:
+				# Keep selected card highlighted but restore normal interaction
+				top_card.card_state = Card.CardState.NORMAL
+				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
+			else:
+				top_card.exit_targeting_mode()
 
 	# Clear highlights
 	clear_all_target_highlights()
 
 	# Disable entity targeting
 	disable_entity_targeting()
+
+	# Hide targeting status UI
+	hide_targeting_status()
 
 	# Clear targeting variables
 	targeting_card_data = {}
@@ -2411,6 +2462,10 @@ func on_target_selected(target):
 	# Visual feedback for selected target
 	if target is Node2D:  # Entity
 		target.mark_as_targeted()
+
+	# Update targeting status UI
+	var card_name = targeting_card_data.get("name", "Unknown")
+	show_targeting_status(selected_targets.size(), required_target_count, card_name)
 
 	print("  Selected ", selected_targets.size(), "/", required_target_count, " targets")
 

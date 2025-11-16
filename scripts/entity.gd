@@ -172,18 +172,29 @@ func disable_targeting():
 	clear_target_visuals()
 
 func show_as_valid_target():
-	"""Show visual feedback that this is a valid target (green glow)"""
+	"""Show visual feedback that this is a valid target with timeline-specific colors"""
 	is_highlighted_as_target = true
 
-	# Add green glow effect
-	modulate = Color(1.2, 1.5, 1.2, 1.0)  # Bright green tint
+	# Timeline-specific highlight colors
+	var highlight_color: Color
+	match timeline_type:
+		"past":
+			highlight_color = Color(1.5, 1.3, 0.8, 1.0)  # Warm golden (past)
+		"present":
+			highlight_color = Color(1.2, 1.5, 1.2, 1.0)  # Bright green (present)
+		"future":
+			highlight_color = Color(0.8, 1.3, 1.5, 1.0)  # Cool cyan (future)
+		_:
+			highlight_color = Color(1.2, 1.5, 1.2, 1.0)  # Default green
+
+	modulate = highlight_color
 
 	# Subtle pulse animation
 	var tween = create_tween().set_loops()
 	tween.tween_property(self, "scale", Vector2(1.08, 1.08), 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
-	print("Entity ", entity_data.get("name", "Unknown"), " highlighted as valid target")
+	print("Entity ", entity_data.get("name", "Unknown"), " highlighted as valid target (", timeline_type, ")")
 
 func mark_as_targeted():
 	"""Visual feedback for being selected as a target (golden glow)"""
