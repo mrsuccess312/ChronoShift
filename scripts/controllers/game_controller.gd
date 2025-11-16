@@ -60,10 +60,10 @@ func _ready() -> void:
 	print("  ChronoShift - GameController Initializing...")
 	print("=".repeat(60) + "\n")
 
-	# Setup carousel first (creates timeline_panels)
+	# Setup carousel FIRST (creates timeline_panels)
 	_setup_carousel()
 
-	# Create and configure systems
+	# THEN initialize systems (they need timeline_panels reference)
 	_initialize_systems()
 
 	# Initialize game state
@@ -85,24 +85,28 @@ func _initialize_systems() -> void:
 	# Combat system
 	combat_resolver = CombatResolver.new()
 	add_child(combat_resolver)
+	# CRITICAL: Set timeline_panels AFTER adding as child
+	combat_resolver.timeline_panels = timeline_panels
 	print("  ✅ CombatResolver created")
 
 	# Card system
 	card_manager = CardManager.new()
+	add_child(card_manager)
+	# Set references AFTER adding as child
 	card_manager.past_deck_container = past_deck_container
 	card_manager.present_deck_container = present_deck_container
 	card_manager.future_deck_container = future_deck_container
 	card_manager.timeline_panels = timeline_panels
-	add_child(card_manager)
 	card_manager.initialize_decks()
 	print("  ✅ CardManager created")
 
 	# Targeting system
 	targeting_system = TargetingSystem.new()
+	add_child(targeting_system)
+	# Set references AFTER adding as child
 	targeting_system.timeline_panels = timeline_panels
 	targeting_system.ui_root = ui_root
 	targeting_system.card_manager = card_manager
-	add_child(targeting_system)
 	targeting_system.initialize()
 	print("  ✅ TargetingSystem created")
 
@@ -502,6 +506,120 @@ func _create_timeline_entities(tp: Panel) -> void:
 		tp.entities.append(twin_entity)
 
 
+func _create_timeline_arrows(tp: Panel) -> void:
+	"""Create arrows for a timeline panel based on its timeline_type"""
+	tp.clear_arrows()
+
+	if tp == null or tp.state.is_empty():
+		return
+
+	if not tp.state.has("enemies") or tp.state["enemies"].size() == 0:
+		return
+
+	match tp.timeline_type:
+		"past":
+			pass  # No arrows
+		"present":
+			_create_player_attack_arrows(tp)
+		"future":
+			_create_enemy_attack_arrows(tp)
+
+
+func _create_player_attack_arrows(tp: Panel) -> void:
+	"""Create arrows from player and twin to leftmost enemy"""
+	var player_entity = null
+	var twin_entity = null
+
+	for entity in tp.entities:
+		if entity.is_player:
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
+
+	if not player_entity:
+		return
+
+	var target_enemy = tp.get_leftmost_enemy()
+	if not target_enemy:
+		return
+
+	# Player arrow
+	if player_entity:
+		var arrow = ARROW_SCENE.instantiate()
+		arrow.z_index = 50
+		arrow.z_as_relative = true
+		tp.add_child(arrow)
+		var curve = _calculate_smart_curve(player_entity.position, target_enemy.position)
+		arrow.setup(player_entity.position, target_enemy.position, curve)
+		tp.arrows.append(arrow)
+
+	# Twin arrow
+	if twin_entity:
+		var twin_arrow = ARROW_SCENE.instantiate()
+		twin_arrow.z_index = 50
+		twin_arrow.z_as_relative = true
+		tp.add_child(twin_arrow)
+		var twin_curve = _calculate_smart_curve(twin_entity.position, target_enemy.position)
+		twin_arrow.setup(twin_entity.position, target_enemy.position, twin_curve)
+		tp.arrows.append(twin_arrow)
+
+
+func _create_enemy_attack_arrows(tp: Panel) -> void:
+	"""Create arrows from each enemy to player/twin"""
+	var player_entity = null
+	var twin_entity = null
+
+	for entity in tp.entities:
+		if entity.is_player:
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
+
+	if not player_entity:
+		return
+
+	var default_target = twin_entity if twin_entity else player_entity
+
+	var enemy_entities = []
+	for entity in tp.entities:
+		if not entity.is_player:
+			enemy_entities.append(entity)
+
+	for i in range(enemy_entities.size()):
+		var enemy = enemy_entities[i]
+		var target = default_target
+
+		# Check for redirect
+		if GameState.future_redirect_flag != null and GameState.future_redirect_flag.get("from_enemy", -1) == i:
+			var to_index = GameState.future_redirect_flag.get("to_enemy", -1)
+			if to_index >= 0 and to_index < enemy_entities.size():
+				target = enemy_entities[to_index]
+
+		# Skip if miss flag
+		if GameState.will_enemy_miss(i):
+			continue
+
+		var arrow = ARROW_SCENE.instantiate()
+		arrow.z_index = 50
+		arrow.z_as_relative = true
+		tp.add_child(arrow)
+		var curve = _calculate_smart_curve(enemy.position, target.position)
+		arrow.setup(enemy.position, target.position, curve)
+		tp.arrows.append(arrow)
+
+
+func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
+	"""Calculate arrow curve based on spatial relationship"""
+	var direction = to - from
+	var horizontal_distance = abs(direction.x)
+	var base_curve = 30.0
+	var horizontal_factor = horizontal_distance / max(direction.length(), 1.0)
+	var curve_strength = base_curve * (0.5 + horizontal_factor * 0.5)
+	return -curve_strength if direction.x < 0 else curve_strength
+
+
 func _delete_all_arrows() -> void:
 	"""Delete all arrows from all panels"""
 	for panel in timeline_panels:
@@ -513,6 +631,38 @@ func _update_all_timeline_displays() -> void:
 	for panel in timeline_panels:
 		if panel.timeline_type in ["past", "present", "future"]:
 			_create_timeline_entities(panel)
+			_create_timeline_arrows(panel)
+			_update_timeline_ui_visibility(panel)
+	_update_damage_display()
+
+
+func _update_timeline_ui_visibility(tp: Panel) -> void:
+	"""Update UI element visibility based on timeline_type"""
+	for entity in tp.entities:
+		if not entity or not is_instance_valid(entity):
+			continue
+
+		# HP labels always visible
+		if entity.has_node("HPLabel"):
+			entity.get_node("HPLabel").visible = true
+
+		# Damage label visibility depends on timeline_type
+		if entity.has_node("DamageLabel") and not entity.is_player:
+			var dmg_label = entity.get_node("DamageLabel")
+			match tp.timeline_type:
+				"past":
+					dmg_label.visible = false
+				"present":
+					dmg_label.visible = true
+				"future":
+					dmg_label.visible = false
+
+	# Arrows visibility
+	for arrow in tp.arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = true
+			if arrow.has_method("show_arrow"):
+				arrow.show_arrow()
 
 # ============================================================================
 # EVENT HANDLERS
