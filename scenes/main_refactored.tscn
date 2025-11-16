@@ -1,6 +1,6 @@
-[gd_scene load_steps=3 format=3 uid="uid://cj8k5h2nqx8vu"]
+[gd_scene load_steps=3 format=3 uid="uid://bfvnpq02hlkwn"]
 
-[ext_resource type="Script" path="res://scripts/controllers/game_controller.gd" id="1_game_controller"]
+[ext_resource type="Script" uid="uid://cled8rl040jft" path="res://scripts/controllers/game_controller.gd" id="1_game_controller"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sugp2"]
 bg_color = Color(0.15686275, 0.15686275, 0.19607843, 1)
