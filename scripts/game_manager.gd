@@ -1378,14 +1378,14 @@ func reset_turn_effects():
 		update_damage_display()  # Update UI
 		print("  Damage boost reset to base: ", base_player_damage)
 
-	# Remove twin from PAST after combat (twin was in PRESENT, rotated to PAST)
-	var past_tp = get_timeline_panel("past")
-	if past_tp and past_tp.state.has("twin"):
-		print("  Removing twin from PAST after combat")
-		past_tp.state.erase("twin")
-		# Update PAST visuals to remove twin entity
-		create_timeline_entities(past_tp)
-		create_timeline_arrows(past_tp)
+	# Remove twin from PRESENT after combat
+	var present_tp = get_timeline_panel("present")
+	if present_tp and present_tp.state.has("twin"):
+		print("  Removing twin from PRESENT after combat")
+		present_tp.state.erase("twin")
+		# Update PRESENT visuals to remove twin entity
+		create_timeline_entities(present_tp)
+		create_timeline_arrows(present_tp)
 
 	# Clear Future manipulation flags
 	future_miss_flags.clear()
@@ -1843,9 +1843,9 @@ func animate_player_attack() -> void:
 	# Find player and target enemy
 	var player_entity = null
 	var target_enemy = null
-	
+
 	for entity in present_tp.entities:
-		if entity.is_player:
+		if entity.is_player and not entity.entity_data.get("is_twin", false):
 			player_entity = entity
 		elif target_enemy == null:
 			target_enemy = entity
