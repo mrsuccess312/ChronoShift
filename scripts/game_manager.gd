@@ -1379,7 +1379,7 @@ func reset_turn_effects():
 		print("  Damage boost reset to base: ", base_player_damage)
 
 	# Remove twin from PRESENT after combat
-	var present_tp = get_timeline_panel("present")
+	# var present_tp = get_timeline_panel("present")
 	if present_tp and present_tp.state.has("twin"):
 		print("  Removing twin from PRESENT after combat")
 		present_tp.state.erase("twin")
