@@ -856,8 +856,9 @@ func _on_damage_dealt(target: Node2D, damage: int) -> void:
 
 
 func _on_timer_updated(time_remaining: float) -> void:
-	"""Update timer display"""
+	"""Update timer display and card affordability"""
 	_update_timer_display()
+	card_manager.update_affordability(time_remaining)
 
 
 func _on_wave_changed(new_wave: int) -> void:
