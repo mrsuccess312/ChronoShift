@@ -318,32 +318,38 @@ func _execute_complete_turn() -> void:
 	print("  EXECUTING TURN")
 	print("=".repeat(60) + "\n")
 
+	# Phase 0: Pre-carousel - hide labels/arrows, un-gray Future entities
+	_prepare_for_carousel()
+
 	# Phase 1: Carousel slide
 	await _carousel_slide_animation()
 
-	# Phase 2: Combat (via CombatResolver)
+	# Phase 2: Post-carousel - show labels on new Present
+	_show_labels_after_carousel()
+
+	# Phase 3: Combat (via CombatResolver)
 	var present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel)
 
-	# Phase 3: Turn effects
+	# Phase 4: Turn effects
 	GameState.reset_turn_effects()
 	GameState.increment_turn()
 
-	# Phase 4: Check game over
+	# Phase 5: Check game over
 	if present_panel.state["player"]["hp"] <= 0:
 		GameState.set_game_over()
 		return
 
-	# Phase 5: Recalculate future
+	# Phase 6: Recalculate future
 	_recalculate_future_timelines()
 
-	# Phase 6: Update timeline displays (recreate entities/arrows)
+	# Phase 7: Update timeline displays (recreate entities/arrows for new future)
 	_update_all_timeline_displays()
 
-	# Phase 7: Update UI labels
+	# Phase 8: Update UI labels
 	_update_all_displays()
 
-	# Phase 8: Show arrows after combat
+	# Phase 9: Show arrows after combat
 	_show_timeline_arrows()
 
 	print("\n✅ Turn complete\n")
@@ -382,12 +388,6 @@ func _carousel_slide_animation() -> void:
 	timeline_panels[1].state = state_for_past  # New Past gets old Present
 	timeline_panels[2].state = state_for_new_present  # New Present gets actual current state (NOT old Future!)
 
-	# Clear decorative panel states and entities
-	for i in [0, 4, 5]:
-		timeline_panels[i].state = {}
-		timeline_panels[i].clear_entities()
-		timeline_panels[i].clear_arrows()
-
 	# Animate panels to new positions
 	var tween = create_tween()
 	tween.set_parallel(true)
@@ -406,6 +406,12 @@ func _carousel_slide_animation() -> void:
 
 	await tween.finished
 
+	# Clear decorative panel states and entities AFTER slide animation
+	for i in [0, 4, 5]:
+		timeline_panels[i].state = {}
+		timeline_panels[i].clear_entities()
+		timeline_panels[i].clear_arrows()
+
 	# Update panel interactivity
 	_update_panel_mouse_filters()
 
@@ -413,6 +419,48 @@ func _carousel_slide_animation() -> void:
 	_show_ui_after_carousel()
 
 	print("✅ Carousel slide complete")
+
+
+func _prepare_for_carousel() -> void:
+	"""Prepare for carousel: hide labels/arrows, un-gray Future entities"""
+	print("📋 Preparing for carousel...")
+
+	# Hide all HP/DMG labels
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if entity and is_instance_valid(entity):
+				if entity.has_node("HPLabel"):
+					entity.get_node("HPLabel").visible = false
+				if entity.has_node("DamageLabel"):
+					entity.get_node("DamageLabel").visible = false
+
+	# Un-gray dead entities in Future (they're about to become Present)
+	var future_panel = timeline_panels[3]
+	if future_panel and future_panel.timeline_type == "future":
+		for entity in future_panel.entities:
+			if entity and is_instance_valid(entity):
+				entity.modulate = Color(1, 1, 1, 1)  # Restore normal color
+
+	print("  Labels hidden, Future entities un-grayed")
+
+
+func _show_labels_after_carousel() -> void:
+	"""Show HP/DMG labels on new Present after carousel"""
+	print("📋 Showing labels after carousel...")
+
+	var present_panel = timeline_panels[2]
+	if present_panel and present_panel.timeline_type == "present":
+		for entity in present_panel.entities:
+			if entity and is_instance_valid(entity):
+				if entity.has_node("HPLabel"):
+					entity.get_node("HPLabel").visible = true
+				if entity.has_node("DamageLabel"):
+					var dmg_label = entity.get_node("DamageLabel")
+					# Only show damage labels for enemies
+					if not entity.is_player:
+						dmg_label.visible = true
+
+	print("  Labels shown on new Present")
 
 
 func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
@@ -474,11 +522,19 @@ func _calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 		# Player attacks first enemy
 		future["enemies"][0]["hp"] -= future["player"]["damage"]
 		if future["enemies"][0]["hp"] <= 0:
-			future["enemies"].remove_at(0)
+			# Mark as dead but keep in array (for grayed-out display)
+			future["enemies"][0]["hp"] = 0
+			future["enemies"][0]["is_dead"] = true
 
-	# Enemies attack player
+	# Enemies attack player (only alive enemies attack)
 	for enemy in future["enemies"]:
-		future["player"]["hp"] -= enemy["damage"]
+		if not enemy.get("is_dead", false):
+			future["player"]["hp"] -= enemy["damage"]
+
+	# Mark player as dead if HP <= 0
+	if future["player"]["hp"] <= 0:
+		future["player"]["hp"] = 0
+		future["player"]["is_dead"] = true
 
 	return future
 
@@ -528,6 +584,10 @@ func _create_timeline_entities(tp: Panel) -> void:
 			tp.add_child(enemy_entity)
 			tp.entities.append(enemy_entity)
 
+			# Gray out dead enemies in Future timeline
+			if tp.timeline_type == "future" and tp.state["enemies"][i].get("is_dead", false):
+				enemy_entity.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Grayed out
+
 	# Create player
 	var player_grid_pos = Vector2i(-1, -1)
 	if tp.state.has("player"):
@@ -540,6 +600,10 @@ func _create_timeline_entities(tp: Panel) -> void:
 		player_entity.position = world_pos
 		tp.add_child(player_entity)
 		tp.entities.append(player_entity)
+
+		# Gray out dead player in Future timeline
+		if tp.timeline_type == "future" and tp.state["player"].get("is_dead", false):
+			player_entity.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Grayed out
 
 	# Create twin if exists
 	if tp.state.has("twin"):
@@ -591,7 +655,20 @@ func _create_player_attack_arrows(tp: Panel) -> void:
 	if not player_entity:
 		return
 
-	var target_enemy = tp.get_leftmost_enemy()
+	# Find leftmost ALIVE enemy (skip dead enemies in Future)
+	var target_enemy = null
+	var leftmost_x = INF
+	for i in range(tp.entities.size()):
+		var entity = tp.entities[i]
+		if not entity.is_player:
+			# Skip dead enemies in Future timeline
+			if tp.timeline_type == "future" and i < tp.state["enemies"].size():
+				if tp.state["enemies"][i].get("is_dead", false):
+					continue
+			if entity.position.x < leftmost_x:
+				leftmost_x = entity.position.x
+				target_enemy = entity
+
 	if not target_enemy:
 		return
 
@@ -642,6 +719,11 @@ func _create_enemy_attack_arrows(tp: Panel) -> void:
 
 	for i in range(enemy_entities.size()):
 		var enemy = enemy_entities[i]
+
+		# Skip if enemy is dead (in Future timeline)
+		if tp.timeline_type == "future" and tp.state["enemies"][i].get("is_dead", false):
+			continue
+
 		var target = default_target
 
 		# Check for redirect
