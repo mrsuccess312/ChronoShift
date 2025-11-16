@@ -47,7 +47,7 @@ static func get_all_cards() -> Array:
 		{
 			"id": "conscript_enemy",
 			"name": "Conscript Past Enemy",
-			"description": "Click enemy in PAST to swap positions",
+			"description": "Enemy fights for you this turn",
 			"timeline_type": TimelineType.PAST,
 			"effect_type": EffectType.CONSCRIPT_PAST_ENEMY,
 			"effect_value": 0,

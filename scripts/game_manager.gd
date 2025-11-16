@@ -23,6 +23,11 @@ var base_player_damage = 15
 var damage_boost_active = false  # Whether damage boost was used this turn
 var temporary_entities = []  # Past Twins, Conscripted Enemies
 
+# Track conscription state
+var conscription_active = false  # Whether an enemy is fighting in player's place
+var original_player_data = {}  # Original player stats before conscription
+var conscripted_enemy_data = {}  # The enemy currently fighting as player
+
 # Track Future manipulation flags
 var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
 var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
@@ -1397,10 +1402,37 @@ func execute_complete_turn():
 	# CRITICAL: Check for game over BEFORE recalculating future
 	var present_tp = timeline_panels[2]
 	if present_tp.state["player"]["hp"] <= 0:
-		print("\n💀 GAME OVER - Player died!")
-		handle_game_over()
-		return  # Stop turn execution
-	
+		# If conscription is active, the conscripted enemy died - not game over
+		if conscription_active:
+			print("\n💀 Conscripted enemy died - restoring original player")
+			# Restore original player
+			present_tp.state["player"] = original_player_data.duplicate(true)
+			conscription_active = false
+			original_player_data = {}
+			conscripted_enemy_data = {}
+			print("  ✅ Player restored: HP=", present_tp.state["player"]["hp"], " DMG=", present_tp.state["player"]["damage"])
+
+			# Update visuals to show restored player
+			create_timeline_entities(present_tp)
+			create_timeline_arrows(present_tp)
+		else:
+			# Real player died - game over
+			print("\n💀 GAME OVER - Player died!")
+			handle_game_over()
+			return  # Stop turn execution
+	elif conscription_active:
+		# Conscripted enemy survived - restore player anyway
+		print("\n✅ Conscripted enemy survived - restoring original player")
+		present_tp.state["player"] = original_player_data.duplicate(true)
+		conscription_active = false
+		original_player_data = {}
+		conscripted_enemy_data = {}
+		print("  ✅ Player restored: HP=", present_tp.state["player"]["hp"], " DMG=", present_tp.state["player"]["damage"])
+
+		# Update visuals to show restored player
+		create_timeline_entities(present_tp)
+		create_timeline_arrows(present_tp)
+
 	# PHASE 4: Recalculate Future and Decorative Future
 	print("\n🔮 PHASE 5: Recalculate Future timelines")
 	recalculate_future_timelines()
@@ -2267,24 +2299,28 @@ func apply_card_effect_with_targets(card_data: Dictionary, targets: Array):
 						break
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
-			# Conscript enemy from PAST to fight for you
+			# Conscript enemy from PAST to swap with player
 			var past_tp = get_timeline_panel("past")
 			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
 				var target_entity = targets[0]
 				var conscripted_data = target_entity.entity_data.duplicate()
-				conscripted_data["name"] = "Conscripted " + conscripted_data["name"]
 
-				print("Conscripted ", conscripted_data["name"], " to fight for you")
+				print("🔄 Conscripting ", conscripted_data["name"], " to fight in player's place")
 
-				# Conscripted enemy attacks leftmost enemy in Present
-				if present_tp.state["enemies"].size() > 0:
-					var damage = conscripted_data.get("damage", 0)
-					present_tp.state["enemies"][0]["hp"] -= damage
-					print("  Conscripted enemy deals ", damage, " damage to ", present_tp.state["enemies"][0]["name"])
+				# Store original player data (for restoration after combat)
+				original_player_data = present_tp.state["player"].duplicate(true)
+				print("  Stored original player: HP=", original_player_data["hp"], " DMG=", original_player_data["damage"])
 
-					if present_tp.state["enemies"][0]["hp"] <= 0:
-						print("  Enemy defeated by conscripted ally!")
-						present_tp.state["enemies"].remove_at(0)
+				# Replace player with conscripted enemy in PRESENT
+				conscripted_enemy_data = conscripted_data.duplicate()
+				conscripted_enemy_data["name"] = "Conscripted " + conscripted_data["name"]
+				present_tp.state["player"] = conscripted_enemy_data.duplicate()
+
+				# Mark conscription as active
+				conscription_active = true
+
+				print("  ✅ Player replaced with ", conscripted_enemy_data["name"])
+				print("  Conscripted stats: HP=", conscripted_enemy_data["hp"], " DMG=", conscripted_enemy_data.get("damage", 0))
 
 func handle_game_over():
 	"""Handle player death - disable all inputs"""
