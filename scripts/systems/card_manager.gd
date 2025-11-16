@@ -131,7 +131,8 @@ func on_card_played(card_data: Dictionary) -> void:
 	# CHECK IF CARD REQUIRES TARGETING
 	if card_requires_targeting(card_data):
 		print("  🎯 Card requires targeting - entering targeting mode")
-		Events.card_targeting_started.emit(card_data)
+		var top_card = source_deck.get_top_card()
+		Events.card_targeting_started.emit(card_data, top_card, source_deck)
 		return  # Don't apply effect yet - wait for target selection
 
 	# INSTANT EFFECT CARDS (no targeting required)

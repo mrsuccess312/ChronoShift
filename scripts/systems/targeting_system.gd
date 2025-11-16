@@ -334,7 +334,7 @@ func _hide_targeting_status() -> void:
 
 
 ## Event handler for targeting mode start (connected in initialize)
-func _on_card_targeting_started(card_data: Dictionary) -> void:
-	# This can be used by GameController to trigger additional logic
-	# For now, it's a placeholder for future functionality
-	pass
+func _on_card_targeting_started(card_data: Dictionary, card_node: Node, source_deck) -> void:
+	"""Handle targeting start event from CardManager"""
+	print("🎯 TargetingSystem received targeting_started event for: ", card_data.get("name", "Unknown"))
+	enter_targeting_mode(card_data, card_node, source_deck)

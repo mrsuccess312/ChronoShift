@@ -56,8 +56,8 @@ signal card_played(card_data: Dictionary)
 ## Emitted when a card is recycled
 signal card_recycled(card_data: Dictionary)
 
-## Emitted when card targeting begins
-signal card_targeting_started(card_data: Dictionary)
+## Emitted when card targeting begins (includes card node and source deck for system communication)
+signal card_targeting_started(card_data: Dictionary, card_node: Node, source_deck)
 
 ## Emitted when card targeting is completed with targets
 signal card_targeting_completed(card_data: Dictionary, targets: Array)
