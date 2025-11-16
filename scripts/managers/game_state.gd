@@ -44,6 +44,9 @@ var base_player_damage: int = 15
 ## Flag for temporary damage boost effects
 var damage_boost_active: bool = false
 
+## Stores original damage before boost (for future_sight restoration)
+var original_damage_before_boost: int = 0
+
 # ============================================================================
 # CONSCRIPTION STATE (Card Effect)
 # ============================================================================

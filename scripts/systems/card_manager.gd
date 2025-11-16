@@ -173,9 +173,11 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 			print("Dealt ", effect_value, " damage to all")
 
 		CardDatabase.EffectType.BOOST_DAMAGE:
+			# Store original damage before boost
+			GameState.original_damage_before_boost = present_tp.state["player"]["damage"]
 			present_tp.state["player"]["damage"] += effect_value
 			GameState.damage_boost_active = true  # Mark for reset next turn
-			print("Boosted damage by ", effect_value, " (will reset next turn)")
+			print("Boosted damage by ", effect_value, " (will reset next turn from ", GameState.original_damage_before_boost, " to ", present_tp.state["player"]["damage"], ")")
 			Events.damage_display_updated.emit(present_tp.state["player"]["damage"])
 
 		CardDatabase.EffectType.ENEMY_SWAP:
@@ -313,17 +315,29 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					present_tp.state["enemies"][idx2] = temp
 					print("Swapped ", enemy1_name, " and ", enemy2_name)
 
+					# Update entity visuals
+					targets[0].entity_data = present_tp.state["enemies"][idx1]
+					targets[0].update_display()
+					targets[1].entity_data = present_tp.state["enemies"][idx2]
+					targets[1].update_display()
+
 		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
 			if targets.size() >= 2:
+				var future_tp = _get_timeline_panel("future")
+				if not future_tp or future_tp.state.is_empty():
+					print("No future state - redirect attack failed")
+					return
+
 				var source_enemy = targets[0]
 				var target_enemy = targets[1]
 				var source_idx = -1
 				var target_idx = -1
 
-				for i in range(present_tp.state["enemies"].size()):
-					if present_tp.state["enemies"][i]["name"] == source_enemy.entity_data["name"]:
+				# Find indices in FUTURE timeline (not present)
+				for i in range(future_tp.state["enemies"].size()):
+					if future_tp.state["enemies"][i]["name"] == source_enemy.entity_data["name"]:
 						source_idx = i
-					if present_tp.state["enemies"][i]["name"] == target_enemy.entity_data["name"]:
+					if future_tp.state["enemies"][i]["name"] == target_enemy.entity_data["name"]:
 						target_idx = i
 
 				if source_idx >= 0 and target_idx >= 0:
@@ -346,6 +360,14 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 								if damage_taken > 0:
 									present_tp.state["enemies"][i]["hp"] -= damage_taken
 									print("Transferred ", damage_taken, " wound damage to ", target_name)
+
+									# Update entity visual
+									target_entity.entity_data = present_tp.state["enemies"][i]
+									target_entity.update_display()
+
+									# Emit damage event for visual feedback
+									Events.damage_dealt.emit(target_entity, damage_taken)
+
 									if present_tp.state["enemies"][i]["hp"] <= 0:
 										present_tp.state["enemies"].remove_at(i)
 								break
@@ -447,7 +469,7 @@ func get_valid_target_timelines(card_data: Dictionary) -> Array:
 		CardDatabase.EffectType.ENEMY_SWAP:
 			return ["present"]
 		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
-			return ["present"]
+			return ["future"]
 		CardDatabase.EffectType.WOUND_TRANSFER:
 			return ["past"]
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:

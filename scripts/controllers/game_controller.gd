@@ -331,7 +331,13 @@ func _execute_complete_turn() -> void:
 	var present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel)
 
-	# Phase 4: Turn effects
+	# Phase 4: Turn effects and damage restoration
+	# Restore damage if boost was active
+	if GameState.damage_boost_active and GameState.original_damage_before_boost > 0:
+		present_panel.state["player"]["damage"] = GameState.original_damage_before_boost
+		print("✅ Restored damage from boost to original value: ", GameState.original_damage_before_boost)
+		Events.damage_display_updated.emit(GameState.original_damage_before_boost)
+
 	GameState.reset_turn_effects()
 	GameState.increment_turn()
 
