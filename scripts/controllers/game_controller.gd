@@ -445,11 +445,15 @@ func _prepare_for_carousel() -> void:
 
 
 func _show_labels_after_carousel() -> void:
-	"""Show HP/DMG labels on new Present after carousel"""
+	"""Show HP/DMG labels on new Present after carousel and sync entity data"""
 	print("📋 Showing labels after carousel...")
 
 	var present_panel = timeline_panels[2]
 	if present_panel and present_panel.timeline_type == "present":
+		# First, update entity data to match actual Present state (not Future predictions)
+		_sync_entities_to_state(present_panel)
+
+		# Then show labels with correct values
 		for entity in present_panel.entities:
 			if entity and is_instance_valid(entity):
 				if entity.has_node("HPLabel"):
@@ -460,7 +464,32 @@ func _show_labels_after_carousel() -> void:
 					if not entity.is_player:
 						dmg_label.visible = true
 
-	print("  Labels shown on new Present")
+	print("  Labels shown on new Present with actual state values")
+
+
+func _sync_entities_to_state(panel: Panel) -> void:
+	"""Sync entity data to match panel state (fixes Future→Present data mismatch)"""
+	if panel.state.is_empty():
+		return
+
+	var enemy_index = 0
+	for entity in panel.entities:
+		if not entity or not is_instance_valid(entity):
+			continue
+
+		if entity.is_player:
+			# Update player entity data from panel state
+			if panel.state.has("player"):
+				entity.entity_data = panel.state["player"].duplicate()
+				entity.update_display()
+				print("  Synced player: HP=", entity.entity_data["hp"])
+		else:
+			# Update enemy entity data from panel state
+			if panel.state.has("enemies") and enemy_index < panel.state["enemies"].size():
+				entity.entity_data = panel.state["enemies"][enemy_index].duplicate()
+				entity.update_display()
+				print("  Synced enemy ", enemy_index, ": HP=", entity.entity_data["hp"])
+				enemy_index += 1
 
 
 func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
