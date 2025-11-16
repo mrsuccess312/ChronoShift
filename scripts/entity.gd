@@ -97,10 +97,12 @@ func update_display():
 			damage_label.visible = false
 	
 	# Set sprite color
-	if is_player:
-		sprite.color = Color(1.0, 0.5, 0.2)  # Orange
+	# Check if this is a conscripted enemy (enemy fighting in player's place)
+	var is_conscripted = entity_data.get("is_conscripted_enemy", false)
+	if is_player and not is_conscripted:
+		sprite.color = Color(1.0, 0.5, 0.2)  # Orange (real player)
 	else:
-		sprite.color = Color(0.3, 0.8, 0.3)  # Green
+		sprite.color = Color(0.3, 0.8, 0.3)  # Green (enemy or conscripted enemy)
 	
 	# Visual feedback for low HP
 	if current_hp <= 0:

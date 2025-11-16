@@ -39,6 +39,8 @@ var targeting_card_node = null  # The card node that's targeting
 var targeting_source_deck = null  # Which deck the card came from
 var selected_targets = []  # Array of selected targets (entities or cells)
 var required_target_count = 0  # How many targets this card needs
+var targeting_click_handled = false  # Flag to track if last click was on valid target
+var valid_target_timelines = []  # Array of timeline types that can be targeted
 
 # ===== UI/UX SETTINGS =====
 var enable_panel_hover: bool = true  # Enable floating hover animation on panels
@@ -160,6 +162,27 @@ func _input(event):
 	if event.is_action_pressed("ui_cancel") and targeting_mode_active:
 		print("ESC pressed - canceling targeting mode")
 		cancel_targeting_mode()
+
+	# Handle clicks on empty space to cancel targeting
+	if targeting_mode_active and event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			# Reset the flag - will be set to true if entity is clicked
+			targeting_click_handled = false
+			# Use call_deferred to check after entity clicks have been processed
+			call_deferred("_check_cancel_targeting_from_click")
+
+func _check_cancel_targeting_from_click():
+	"""Called after a click to check if targeting should be canceled"""
+	if not targeting_mode_active:
+		return
+
+	# If the click wasn't handled by a valid target, cancel targeting
+	if not targeting_click_handled:
+		print("Clicked on empty space - canceling targeting mode")
+		cancel_targeting_mode()
+
+	# Reset flag for next click
+	targeting_click_handled = false
 
 func toggle_fullscreen():
 	"""Switch between windowed and fullscreen mode"""
@@ -2023,6 +2046,37 @@ func get_required_target_count(card_data: Dictionary) -> int:
 		_:
 			return 0
 
+func get_valid_target_timelines(card_data: Dictionary) -> Array:
+	"""Get array of timeline types that can be targeted for this card
+	Returns array of strings: ["past"], ["present"], ["future"], or combinations
+	"""
+	var effect_type = card_data.get("effect_type")
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			# Chrono Strike - ONLY PRESENT enemies
+			return ["present"]
+
+		CardDatabase.EffectType.ENEMY_SWAP:
+			# Enemy Swap - ONLY PRESENT enemies
+			return ["present"]
+
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			# Redirect Attack - ONLY PRESENT enemies (affects Future)
+			return ["present"]
+
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			# Wound Transfer - ONLY PAST enemies
+			return ["past"]
+
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			# Conscript Enemy - ONLY PAST enemies
+			return ["past"]
+
+		_:
+			# Default: all timelines
+			return ["past", "present", "future"]
+
 func enter_targeting_mode(card_data: Dictionary, card_node: Node, source_deck: CardDeck):
 	"""Enter targeting mode for a card"""
 	print("\n🎯 ENTERING TARGETING MODE")
@@ -2034,6 +2088,7 @@ func enter_targeting_mode(card_data: Dictionary, card_node: Node, source_deck: C
 	targeting_source_deck = source_deck
 	selected_targets = []
 	required_target_count = get_required_target_count(card_data)
+	valid_target_timelines = get_valid_target_timelines(card_data)
 
 	# Set card visual state
 	if card_node:
@@ -2089,6 +2144,17 @@ func on_target_selected(target):
 	if not targeting_mode_active:
 		return
 
+	# Validate that the target is from a valid timeline
+	if target is Node2D:  # Entity
+		var target_timeline = target.timeline_type
+		if target_timeline not in valid_target_timelines:
+			print("❌ Invalid target: ", target.entity_data.get("name", "Unknown"), " is in ", target_timeline, " (valid: ", valid_target_timelines, ")")
+			# Don't mark click as handled - this will cancel targeting
+			return
+
+	# Mark that this click was handled by a valid target
+	targeting_click_handled = true
+
 	print("🎯 Target selected: ", target)
 
 	# Add to selected targets
@@ -2109,8 +2175,20 @@ func complete_targeting():
 	print("\n✅ TARGETING COMPLETE")
 	print("  Applying effect with targets: ", selected_targets)
 
-	# Deduct time cost
+	# Validate that player still has enough time
 	var time_cost = targeting_card_data.get("time_cost", 0)
+	if time_remaining < time_cost:
+		print("❌ Not enough time! Card cost: ", time_cost, ", Time remaining: ", time_remaining)
+
+		# Play shake animation on the card
+		if targeting_card_node and is_instance_valid(targeting_card_node):
+			targeting_card_node.play_shake_animation()
+
+		# Cancel targeting mode
+		cancel_targeting_mode()
+		return
+
+	# Deduct time cost
 	time_remaining -= time_cost
 	if time_remaining < 0:
 		time_remaining = 0
@@ -2149,43 +2227,16 @@ func complete_targeting():
 	print("  ✅ Card effect applied and targeting complete")
 
 func highlight_valid_targets_for_card(card_data: Dictionary):
-	"""Highlight valid targets based on card effect type"""
-	var effect_type = card_data.get("effect_type")
-	var present_tp = get_timeline_panel("present")
-	var past_tp = get_timeline_panel("past")
+	"""Highlight valid targets based on card effect type and valid timelines"""
+	var valid_timelines = get_valid_target_timelines(card_data)
 
-	match effect_type:
-		CardDatabase.EffectType.DAMAGE_ENEMY:
-			# Highlight all enemies in Present
-			for entity in present_tp.entities:
-				if not entity.is_player:
+	# Iterate through all panels and highlight entities in valid timelines
+	for panel in timeline_panels:
+		# Check if this panel's timeline is valid for targeting
+		if panel.timeline_type in valid_timelines:
+			for entity in panel.entities:
+				if is_instance_valid(entity) and not entity.is_player:
 					entity.show_as_valid_target()
-
-		CardDatabase.EffectType.ENEMY_SWAP:
-			# Highlight all enemies in Present
-			for entity in present_tp.entities:
-				if not entity.is_player:
-					entity.show_as_valid_target()
-
-		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
-			# Highlight all enemies in Present (Future will have same enemies)
-			for entity in present_tp.entities:
-				if not entity.is_player:
-					entity.show_as_valid_target()
-
-		CardDatabase.EffectType.WOUND_TRANSFER:
-			# Highlight all enemies in PAST
-			if past_tp and not past_tp.state.is_empty():
-				for entity in past_tp.entities:
-					if not entity.is_player:
-						entity.show_as_valid_target()
-
-		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
-			# Highlight all enemies in PAST
-			if past_tp and not past_tp.state.is_empty():
-				for entity in past_tp.entities:
-					if not entity.is_player:
-						entity.show_as_valid_target()
 
 func clear_all_target_highlights():
 	"""Clear all target highlights from all panels"""
@@ -2314,6 +2365,7 @@ func apply_card_effect_with_targets(card_data: Dictionary, targets: Array):
 				# Replace player with conscripted enemy in PRESENT
 				conscripted_enemy_data = conscripted_data.duplicate()
 				conscripted_enemy_data["name"] = "Conscripted " + conscripted_data["name"]
+				conscripted_enemy_data["is_conscripted_enemy"] = true  # Flag for visual rendering as enemy
 				present_tp.state["player"] = conscripted_enemy_data.duplicate()
 
 				# Mark conscription as active
