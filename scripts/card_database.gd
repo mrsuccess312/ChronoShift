@@ -54,6 +54,15 @@ static func get_all_cards() -> Array:
 			"time_cost": 12
 		},
 		{
+			"id": "summon_twin",
+			"name": "Summon Past Twin",
+			"description": "Past self fights: 0.5x damage, 0.5x HP",
+			"timeline_type": TimelineType.PAST,
+			"effect_type": EffectType.SUMMON_PAST_TWIN,
+			"effect_value": 0,
+			"time_cost": 10
+		},
+		{
 			"id": "wound_transfer",
 			"name": "Wound Transfer",
 			"description": "Click enemy in PAST to deal matching damage",

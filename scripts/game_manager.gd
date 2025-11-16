@@ -400,6 +400,29 @@ func get_timeline_panel(timeline_type: String) -> Panel:
 
 # ===== ENTITY & ARROW CREATION =====
 
+func find_empty_cell_left_of_player(tp: Panel, player_pos: Vector2i, enemy_count: int) -> Vector2i:
+	"""Find the nearest empty cell to the left of the player for twin placement
+	Returns grid coordinates (row, col)
+	"""
+	# Try cells to the left of player first (same row, col-1)
+	var test_positions = [
+		Vector2i(player_pos.x, player_pos.y - 1),  # Directly left
+		Vector2i(player_pos.x - 1, player_pos.y - 1),  # Up-left diagonal
+		Vector2i(player_pos.x + 1, player_pos.y - 1),  # Down-left diagonal
+		Vector2i(player_pos.x, player_pos.y + 1),  # Right (fallback)
+		Vector2i(player_pos.x - 1, player_pos.y),  # Up
+		Vector2i(player_pos.x + 1, player_pos.y),  # Down
+	]
+
+	# Check each position to see if it's empty and valid
+	for pos in test_positions:
+		if pos.x >= 0 and pos.x < tp.GRID_ROWS and pos.y >= 0 and pos.y < tp.GRID_COLS:
+			if not tp.is_cell_occupied(pos.x, pos.y):
+				return pos
+
+	# Fallback: return position left of player even if occupied
+	return Vector2i(player_pos.x, max(0, player_pos.y - 1))
+
 func create_timeline_entities(tp: Panel):
 	"""Create entity visuals for a timeline panel using grid-based positioning"""
 	print("\n=== Creating entities for ", tp.timeline_type, " timeline ===")
@@ -435,19 +458,35 @@ func create_timeline_entities(tp: Panel):
 			print("  Enemy ", i, " placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
 
 	# Create player entity using grid positioning
+	var player_grid_pos = Vector2i(-1, -1)
 	if tp.state.has("player"):
 		var player_entity = ENTITY_SCENE.instantiate()
 		player_entity.setup(tp.state["player"], true, tp.timeline_type)
 
 		# Get grid position for player
-		var grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
-		var world_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+		player_grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
+		var world_pos = tp.get_cell_center_position(player_grid_pos.x, player_grid_pos.y)
 
 		player_entity.position = world_pos
 		tp.add_child(player_entity)
 		tp.entities.append(player_entity)
 
-		print("  Player placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
+		print("  Player placed at grid (", player_grid_pos.x, ", ", player_grid_pos.y, ") -> world ", world_pos)
+
+	# Create twin entity if it exists
+	if tp.state.has("twin"):
+		var twin_entity = ENTITY_SCENE.instantiate()
+		twin_entity.setup(tp.state["twin"], true, tp.timeline_type)  # is_player=true for orange color
+
+		# Find nearest empty cell to the left of player
+		var twin_grid_pos = find_empty_cell_left_of_player(tp, player_grid_pos, enemy_count)
+		var world_pos = tp.get_cell_center_position(twin_grid_pos.x, twin_grid_pos.y)
+
+		twin_entity.position = world_pos
+		tp.add_child(twin_entity)
+		tp.entities.append(twin_entity)
+
+		print("  Twin placed at grid (", twin_grid_pos.x, ", ", twin_grid_pos.y, ") -> world ", world_pos)
 
 	print("  Created ", tp.entities.size(), " entities")
 
@@ -1083,19 +1122,23 @@ func apply_card_effect(card_data: Dictionary):
 		
 		CardDatabase.EffectType.SUMMON_PAST_TWIN:
 			if past_tp and not past_tp.state.is_empty():
-				# Create twin entity data (0.5x damage, 2x damage taken)
+				print("\n🔄 Summoning Past Twin")
+
+				# Create twin entity data based on PAST player stats
 				var twin_data = {
 					"name": "Past Twin",
-					"hp": past_tp.state["player"]["hp"] / 2,  # Half HP for balance
-					"max_hp": past_tp.state["player"]["max_hp"] / 2,
-					"damage": past_tp.state["player"]["damage"] / 2,  # 0.5x damage
-					"is_twin": true,
-					"damage_multiplier": 2.0  # Takes 2x damage
+					"hp": int(past_tp.state["player"]["hp"] * 0.5),  # 0.5x HP from PAST
+					"max_hp": int(past_tp.state["player"]["max_hp"] * 0.5),
+					"damage": int(past_tp.state["player"]["damage"] * 0.5),  # 0.5x damage from PAST
+					"is_twin": true
 				}
-				# Add as an ally (TODO: Will need special logic in combat)
-				print("Summoned Past Twin with ", twin_data["hp"], " HP and ", twin_data["damage"], " damage")
-				# For now, just boost player damage by twin's damage
-				present_tp.state["player"]["damage"] += int(twin_data["damage"])
+
+				print("  Twin stats: HP=", twin_data["hp"], " DMG=", twin_data["damage"])
+
+				# Add twin to PRESENT state
+				present_tp.state["twin"] = twin_data
+
+				print("  ✅ Past Twin summoned to fight alongside you!")
 		
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			if past_tp and not past_tp.state.is_empty() and past_tp.state["enemies"].size() > 0:
@@ -1277,14 +1320,20 @@ func reveal_top_card(deck: CardDeck):
 func reset_turn_effects():
 	"""Reset temporary effects at end of turn"""
 	var present_tp = get_timeline_panel("present")
-	
+
 	# Reset damage boost
 	if damage_boost_active:
 		present_tp.state["player"]["damage"] = base_player_damage
 		damage_boost_active = false
 		update_damage_display()  # Update UI
 		print("  Damage boost reset to base: ", base_player_damage)
-	
+
+	# Remove twin from PAST after combat (twin was in PRESENT, rotated to PAST)
+	var past_tp = get_timeline_panel("past")
+	if past_tp and past_tp.state.has("twin"):
+		print("  Removing twin from PAST after combat")
+		past_tp.state.erase("twin")
+
 	# Clear Future manipulation flags
 	future_miss_flags.clear()
 	future_redirect_flag = null
@@ -1366,15 +1415,38 @@ func apply_screen_shake(strength: float = 10.0):
 func calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 	"""Calculate future state from any given state"""
 	var future = base_state.duplicate(true)
-	
+
 	if future["enemies"].size() > 0:
+		# Player attacks first enemy
 		var target_enemy = future["enemies"][0]
 		target_enemy["hp"] -= future["player"]["damage"]
+
+		# Twin also attacks first enemy if twin exists
+		if future.has("twin"):
+			target_enemy["hp"] -= future["twin"]["damage"]
+			print("  Twin deals ", future["twin"]["damage"], " damage to enemy")
+
+		# Remove defeated enemies
 		future["enemies"] = future["enemies"].filter(func(e): return e["hp"] > 0)
-		
+
+		# Enemies counter-attack
+		# If twin exists, enemies attack twin first (leftmost)
+		var twin_alive = future.has("twin")
 		for enemy in future["enemies"]:
-			future["player"]["hp"] -= enemy["damage"]
-	
+			if twin_alive:
+				# Attack twin
+				future["twin"]["hp"] -= enemy["damage"]
+				print("  Enemy deals ", enemy["damage"], " damage to twin (HP: ", future["twin"]["hp"], ")")
+
+				# Check if twin died
+				if future["twin"]["hp"] <= 0:
+					print("  Twin defeated!")
+					future.erase("twin")
+					twin_alive = false
+			else:
+				# Attack player
+				future["player"]["hp"] -= enemy["damage"]
+
 	return future
 
 func rotate_timeline_panels_7():

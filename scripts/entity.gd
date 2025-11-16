@@ -99,7 +99,11 @@ func update_display():
 	# Set sprite color
 	# Check if this is a conscripted enemy (enemy fighting in player's place)
 	var is_conscripted = entity_data.get("is_conscripted_enemy", false)
-	if is_player and not is_conscripted:
+	var is_twin = entity_data.get("is_twin", false)
+
+	if is_twin:
+		sprite.color = Color(0.7, 0.35, 0.15, 0.8)  # Lighter/faded orange for twin
+	elif is_player and not is_conscripted:
 		sprite.color = Color(1.0, 0.5, 0.2)  # Orange (real player)
 	else:
 		sprite.color = Color(0.3, 0.8, 0.3)  # Green (enemy or conscripted enemy)
