@@ -122,6 +122,7 @@ func _connect_events() -> void:
 	Events.game_over.connect(_on_game_over)
 	Events.screen_shake_requested.connect(_apply_screen_shake)
 	Events.card_played.connect(_on_card_played)
+	Events.future_recalculation_requested.connect(_on_future_recalculation_requested)
 	print("  Events connected")
 
 # ============================================================================
@@ -233,6 +234,49 @@ func _update_panel_mouse_filters() -> void:
 		panel.start_hover_animation()
 
 
+func _disable_all_input() -> void:
+	"""Disable all mouse input during animations to prevent freezing"""
+	# Disable panel interaction
+	for panel in timeline_panels:
+		panel.set_grid_interactive(false)
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Disable all entity interaction
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if entity and is_instance_valid(entity) and entity.has_node("Sprite"):
+				entity.get_node("Sprite").mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Disable card interaction
+	if card_manager:
+		for deck in [card_manager.deck_left, card_manager.deck_right]:
+			if deck:
+				for card_node in deck.card_nodes:
+					if card_node and is_instance_valid(card_node):
+						card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+func _enable_all_input() -> void:
+	"""Re-enable mouse input after animations complete"""
+	# Re-enable panel interaction based on z_index
+	_update_panel_mouse_filters()
+
+	# Re-enable panels' mouse filters
+	for panel in timeline_panels:
+		panel.mouse_filter = Control.MOUSE_FILTER_PASS
+
+	# Re-enable entity interaction (targeting system will handle this)
+	# Entities will be re-enabled by targeting system when needed
+
+	# Re-enable card interaction
+	if card_manager:
+		for deck in [card_manager.deck_left, card_manager.deck_right]:
+			if deck:
+				var top_card = deck.get_top_card()
+				if top_card and is_instance_valid(top_card):
+					top_card.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
 func _apply_ui_settings_to_panels() -> void:
 	for panel in timeline_panels:
 		panel.show_grid_lines(show_grid_lines)
@@ -318,6 +362,9 @@ func _execute_complete_turn() -> void:
 	print("  EXECUTING TURN")
 	print("=".repeat(60) + "\n")
 
+	# Disable all input during turn execution to prevent freezing
+	_disable_all_input()
+
 	# Phase 0: Pre-carousel - hide labels/arrows, un-gray Future entities
 	_prepare_for_carousel()
 
@@ -380,6 +427,7 @@ func _execute_complete_turn() -> void:
 	# Note: We check conscription_active BEFORE reset, but we already reset it above
 	# So we need to check if player HP is actually <= 0 in original data
 	if present_panel.state["player"]["hp"] <= 0:
+		_enable_all_input()  # Re-enable input before game over
 		GameState.set_game_over()
 		return
 
@@ -394,6 +442,9 @@ func _execute_complete_turn() -> void:
 
 	# Phase 9: Show arrows after combat
 	_show_timeline_arrows()
+
+	# Phase 10: Re-enable input after all animations complete
+	_enable_all_input()
 
 	print("\n✅ Turn complete\n")
 
@@ -926,6 +977,16 @@ func _on_card_played(card_data: Dictionary) -> void:
 	# Recalculate future after card effect
 	_recalculate_future_timelines()
 	_update_all_timeline_displays()
+	_show_timeline_arrows()  # Show arrows including any redirected ones
+
+
+func _on_future_recalculation_requested() -> void:
+	"""Handle request to recalculate future (e.g., after enemy_swap)"""
+	print("  🔄 Future recalculation requested by card effect...")
+	_recalculate_future_timelines()
+	_update_all_timeline_displays()
+	_show_timeline_arrows()
+	print("  ✅ Future recalculated and displays updated")
 
 # ============================================================================
 # UI UPDATES

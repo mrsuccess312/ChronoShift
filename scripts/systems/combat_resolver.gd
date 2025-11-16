@@ -250,9 +250,6 @@ func _animate_enemy_attacks(present_panel: Panel) -> void:
 
 	print("  Enemy attacks starting...")
 
-	# Track if twin is still alive
-	var twin_alive = (twin_entity != null and present_panel.state.has("twin"))
-
 	# Animate each enemy sequentially
 	for enemy_info in enemy_list:
 		var enemy_index = enemy_info["index"]
@@ -262,7 +259,7 @@ func _animate_enemy_attacks(present_panel: Panel) -> void:
 			print("  Enemy ", enemy_index, " misses (Chaos Injection effect)")
 			continue
 
-		# Determine target: twin first, then player
+		# Determine target: leftmost ally (twin or player)
 		var target = null
 		var target_is_twin = false
 
@@ -273,12 +270,28 @@ func _animate_enemy_attacks(present_panel: Panel) -> void:
 				target = enemy_list[to_index]["node"]
 				print("  Enemy ", enemy_index, " attacks enemy ", to_index, " (Redirect effect)")
 		else:
-			# Target twin first (leftmost), then player
-			if twin_alive:
-				target = twin_entity
-				target_is_twin = true
-			else:
-				target = player_entity
+			# Find leftmost ally (by x-position) to attack
+			var leftmost_ally = null
+			var leftmost_x = INF
+			var leftmost_is_twin = false
+
+			# Check player
+			if player_entity and is_instance_valid(player_entity):
+				if player_entity.position.x < leftmost_x:
+					leftmost_x = player_entity.position.x
+					leftmost_ally = player_entity
+					leftmost_is_twin = false
+
+			# Check twin (if alive)
+			if twin_entity and is_instance_valid(twin_entity) and present_panel.state.has("twin"):
+				if present_panel.state["twin"]["hp"] > 0:  # Twin still alive
+					if twin_entity.position.x < leftmost_x:
+						leftmost_x = twin_entity.position.x
+						leftmost_ally = twin_entity
+						leftmost_is_twin = true
+
+			target = leftmost_ally
+			target_is_twin = leftmost_is_twin
 
 		await _animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"], target_is_twin, present_panel)
 
@@ -286,7 +299,6 @@ func _animate_enemy_attacks(present_panel: Panel) -> void:
 		if target_is_twin and present_panel.state.has("twin"):
 			if present_panel.state["twin"]["hp"] <= 0:
 				print("  Twin defeated! Remaining enemies will attack player.")
-				twin_alive = false
 				# Remove twin from entities
 				if twin_entity and is_instance_valid(twin_entity):
 					Events.entity_died.emit(twin_entity)

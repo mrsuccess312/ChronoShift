@@ -75,6 +75,9 @@ signal timeline_updated(timeline_type: String)
 ## Emitted when future state is calculated
 signal future_calculated(future_state: Dictionary)
 
+## Emitted when a card effect requests future recalculation (e.g., enemy_swap)
+signal future_recalculation_requested()
+
 ## Emitted when carousel slide animation starts
 signal carousel_slide_started()
 

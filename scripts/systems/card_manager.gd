@@ -321,6 +321,9 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					targets[1].entity_data = present_tp.state["enemies"][idx2]
 					targets[1].update_display()
 
+					# Request future recalculation to reflect new positions
+					Events.future_recalculation_requested.emit()
+
 		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
 			if targets.size() >= 2:
 				var future_tp = _get_timeline_panel("future")
@@ -349,9 +352,10 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
 			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
-				var target_entity = targets[0]
-				var target_name = target_entity.entity_data["name"]
+				var past_target_entity = targets[0]  # This is the Past entity
+				var target_name = past_target_entity.entity_data["name"]
 
+				# Find the corresponding Present enemy
 				for i in range(present_tp.state["enemies"].size()):
 					if present_tp.state["enemies"][i]["name"] == target_name:
 						for past_enemy in past_tp.state.get("enemies", []):
@@ -361,12 +365,15 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 									present_tp.state["enemies"][i]["hp"] -= damage_taken
 									print("Transferred ", damage_taken, " wound damage to ", target_name)
 
-									# Update entity visual
-									target_entity.entity_data = present_tp.state["enemies"][i]
-									target_entity.update_display()
+									# Find and update the PRESENT entity visual (not the Past one)
+									var present_enemy_entity = _find_entity_by_name(present_tp, target_name)
+									if present_enemy_entity:
+										present_enemy_entity.entity_data = present_tp.state["enemies"][i]
+										present_enemy_entity.update_display()
+										print("  ✅ Updated Present enemy HP label")
 
-									# Emit damage event for visual feedback
-									Events.damage_dealt.emit(target_entity, damage_taken)
+										# Emit damage event for visual feedback
+										Events.damage_dealt.emit(present_enemy_entity, damage_taken)
 
 									if present_tp.state["enemies"][i]["hp"] <= 0:
 										present_tp.state["enemies"].remove_at(i)
@@ -589,7 +596,7 @@ func _get_timeline_panel(timeline_type: String):
 
 ## Find entity by name in a panel
 func _find_entity_by_name(panel, entity_name: String):
-	if not panel or not panel.has("entities"):
+	if not panel or not is_instance_valid(panel):
 		return null
 
 	for entity in panel.entities:
@@ -600,7 +607,7 @@ func _find_entity_by_name(panel, entity_name: String):
 
 ## Find player entity in a panel
 func _find_player_entity(panel):
-	if not panel or not panel.has("entities"):
+	if not panel or not is_instance_valid(panel):
 		return null
 
 	for entity in panel.entities:
