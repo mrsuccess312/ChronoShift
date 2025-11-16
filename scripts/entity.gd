@@ -17,6 +17,12 @@ var is_mouse_over = false
 # Original position (for hit reactions)
 var original_position = Vector2.ZERO
 
+# Targeting system
+var is_targetable = false  # Can this entity be targeted right now?
+var is_highlighted_as_target = false  # Is this a valid target (green glow)?
+var is_selected_as_target = false  # Has this been selected as a target (golden glow)?
+var game_manager_ref = null  # Reference to game manager for callbacks
+
 func _process(_delta):
 	"""Check for mouse hover (only for enemies in Past/Future)"""
 	# Only check for enemies in Past/Future timelines
@@ -52,9 +58,22 @@ func _ready():
 	"""Called when node enters scene tree"""
 	# Store original position for hit reactions
 	original_position = position
-	
+
+	# Connect sprite input for targeting
+	if sprite:
+		sprite.gui_input.connect(_on_sprite_gui_input)
+
 	# Update visuals
 	update_display()
+
+func _on_sprite_gui_input(event: InputEvent):
+	"""Handle mouse clicks on sprite for targeting"""
+	if not is_targetable:
+		return
+
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			_on_entity_clicked_for_targeting()
 
 func update_display():
 	"""Update visual elements based on entity data"""
@@ -78,10 +97,16 @@ func update_display():
 			damage_label.visible = false
 	
 	# Set sprite color
-	if is_player:
-		sprite.color = Color(1.0, 0.5, 0.2)  # Orange
+	# Check if this is a conscripted enemy (enemy fighting in player's place)
+	var is_conscripted = entity_data.get("is_conscripted_enemy", false)
+	var is_twin = entity_data.get("is_twin", false)
+
+	if is_twin:
+		sprite.color = Color(0.7, 0.35, 0.15, 0.8)  # Lighter/faded orange for twin
+	elif is_player and not is_conscripted:
+		sprite.color = Color(1.0, 0.5, 0.2)  # Orange (real player)
 	else:
-		sprite.color = Color(0.3, 0.8, 0.3)  # Green
+		sprite.color = Color(0.3, 0.8, 0.3)  # Green (enemy or conscripted enemy)
 	
 	# Visual feedback for low HP
 	if current_hp <= 0:
@@ -105,18 +130,110 @@ func play_hit_reaction(hit_direction: Vector2):
 	"""Play a quick recoil animation when hit"""
 	# Update original position to current position
 	original_position = position
-	
+
 	# Calculate knockback position (20 pixels back)
 	var knockback_pos = position + hit_direction * 20.0
-	
+
 	# Create non-blocking tween (runs independently)
 	var tween = create_tween()
-	
+
 	# Quick knockback (0.08 seconds)
 	tween.tween_property(self, "position", knockback_pos, 0.08).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	
+
 	# Smooth return to original position (0.15 seconds)
 	tween.tween_property(self, "position", original_position, 0.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	
+
 	# NOTE: This tween is NOT awaited - it runs in the background
 	# This allows attack animations to continue without blocking
+
+# ===== TARGETING SYSTEM METHODS =====
+
+func enable_targeting(game_manager):
+	"""Enable this entity as a clickable target"""
+	is_targetable = true
+	game_manager_ref = game_manager
+
+	# Make sprite clickable (MOUSE_FILTER_STOP = 0)
+	if sprite:
+		sprite.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	print("Entity ", entity_data.get("name", "Unknown"), " is now targetable")
+
+func disable_targeting():
+	"""Disable targeting on this entity"""
+	is_targetable = false
+	game_manager_ref = null
+
+	# Disable sprite clicking (MOUSE_FILTER_IGNORE = 2)
+	if sprite:
+		sprite.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Clear any target visuals
+	clear_target_visuals()
+
+func show_as_valid_target():
+	"""Show visual feedback that this is a valid target with timeline-specific colors"""
+	is_highlighted_as_target = true
+
+	# Timeline-specific highlight colors
+	var highlight_color: Color
+	match timeline_type:
+		"past":
+			highlight_color = Color(1.5, 1.3, 0.8, 1.0)  # Warm golden (past)
+		"present":
+			highlight_color = Color(1.2, 1.5, 1.2, 1.0)  # Bright green (present)
+		"future":
+			highlight_color = Color(0.8, 1.3, 1.5, 1.0)  # Cool cyan (future)
+		_:
+			highlight_color = Color(1.2, 1.5, 1.2, 1.0)  # Default green
+
+	modulate = highlight_color
+
+	# Subtle pulse animation
+	var tween = create_tween().set_loops()
+	tween.tween_property(self, "scale", Vector2(1.08, 1.08), 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	print("Entity ", entity_data.get("name", "Unknown"), " highlighted as valid target (", timeline_type, ")")
+
+func mark_as_targeted():
+	"""Visual feedback for being selected as a target (golden glow)"""
+	is_selected_as_target = true
+	is_highlighted_as_target = false
+
+	# Kill any existing tweens
+	var active_tweens = get_tree().get_processed_tweens()
+	for tween in active_tweens:
+		if tween.is_valid():
+			tween.kill()
+
+	# Golden glow to show selection
+	modulate = Color(1.5, 1.3, 0.6, 1.0)  # Golden
+	scale = Vector2(1.1, 1.1)
+
+	print("Entity ", entity_data.get("name", "Unknown"), " marked as targeted")
+
+func clear_target_visuals():
+	"""Clear all targeting visual effects"""
+	is_highlighted_as_target = false
+	is_selected_as_target = false
+
+	# Kill any existing tweens
+	var active_tweens = get_tree().get_processed_tweens()
+	for tween in active_tweens:
+		if tween.is_valid():
+			tween.kill()
+
+	# Return to normal appearance
+	modulate = Color(1.0, 1.0, 1.0, 1.0)
+	scale = Vector2(1.0, 1.0)
+
+func _on_entity_clicked_for_targeting():
+	"""Called when entity is clicked during targeting mode"""
+	if not is_targetable or not game_manager_ref:
+		return
+
+	print("Entity clicked for targeting: ", entity_data.get("name", "Unknown"))
+
+	# Notify game manager
+	game_manager_ref.on_target_selected(self)

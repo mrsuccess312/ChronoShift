@@ -23,9 +23,24 @@ var base_player_damage = 15
 var damage_boost_active = false  # Whether damage boost was used this turn
 var temporary_entities = []  # Past Twins, Conscripted Enemies
 
+# Track conscription state
+var conscription_active = false  # Whether an enemy is fighting in player's place
+var original_player_data = {}  # Original player stats before conscription
+var conscripted_enemy_data = {}  # The enemy currently fighting as player
+
 # Track Future manipulation flags
 var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
 var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
+
+# ===== TARGETING MODE STATE =====
+var targeting_mode_active = false  # Whether we're in targeting mode
+var targeting_card_data = {}  # The card being played
+var targeting_card_node = null  # The card node that's targeting
+var targeting_source_deck = null  # Which deck the card came from
+var selected_targets = []  # Array of selected targets (entities or cells)
+var required_target_count = 0  # How many targets this card needs
+var targeting_click_handled = false  # Flag to track if last click was on valid target
+var valid_target_timelines = []  # Array of timeline types that can be targeted
 
 # ===== UI/UX SETTINGS =====
 var enable_panel_hover: bool = true  # Enable floating hover animation on panels
@@ -127,6 +142,10 @@ var carousel_snapshot = []
 @onready var present_deck_container = $UIRoot/DeckContainers/PresentDeckContainer
 @onready var future_deck_container = $UIRoot/DeckContainers/FutureDeckContainer
 @onready var camera = $Camera2D
+@onready var ui_root = $UIRoot
+
+# Targeting status label (created dynamically)
+var targeting_status_label: Label = null
 
 
 # ===== INITIALIZATION =====
@@ -134,14 +153,41 @@ var carousel_snapshot = []
 func _ready():
 	print("ChronoShift - Game Manager Ready!")
 	play_button.pressed.connect(_on_play_button_pressed)
-	
+
 	setup_carousel()
 	initialize_game()
+	create_targeting_status_label()
 
 func _input(event):
 	"""Handle global input events"""
 	if event.is_action_pressed("toggle_fullscreen"):
 		toggle_fullscreen()
+
+	# Handle ESC key to cancel targeting mode
+	if event.is_action_pressed("ui_cancel") and targeting_mode_active:
+		print("ESC pressed - canceling targeting mode")
+		cancel_targeting_mode()
+
+	# Handle clicks on empty space to cancel targeting
+	if targeting_mode_active and event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			# Reset the flag - will be set to true if entity is clicked
+			targeting_click_handled = false
+			# Use call_deferred to check after entity clicks have been processed
+			call_deferred("_check_cancel_targeting_from_click")
+
+func _check_cancel_targeting_from_click():
+	"""Called after a click to check if targeting should be canceled"""
+	if not targeting_mode_active:
+		return
+
+	# If the click wasn't handled by a valid target, cancel targeting
+	if not targeting_click_handled:
+		print("Clicked on empty space - canceling targeting mode")
+		cancel_targeting_mode()
+
+	# Reset flag for next click
+	targeting_click_handled = false
 
 func toggle_fullscreen():
 	"""Switch between windowed and fullscreen mode"""
@@ -359,6 +405,29 @@ func get_timeline_panel(timeline_type: String) -> Panel:
 
 # ===== ENTITY & ARROW CREATION =====
 
+func find_empty_cell_left_of_player(tp: Panel, player_pos: Vector2i, enemy_count: int) -> Vector2i:
+	"""Find the nearest empty cell to the left of the player for twin placement
+	Returns grid coordinates (row, col)
+	"""
+	# Try cells to the left of player first (same row, col-1)
+	var test_positions = [
+		Vector2i(player_pos.x, player_pos.y - 1),  # Directly left
+		Vector2i(player_pos.x - 1, player_pos.y - 1),  # Up-left diagonal
+		Vector2i(player_pos.x + 1, player_pos.y - 1),  # Down-left diagonal
+		Vector2i(player_pos.x, player_pos.y + 1),  # Right (fallback)
+		Vector2i(player_pos.x - 1, player_pos.y),  # Up
+		Vector2i(player_pos.x + 1, player_pos.y),  # Down
+	]
+
+	# Check each position to see if it's empty and valid
+	for pos in test_positions:
+		if pos.x >= 0 and pos.x < tp.GRID_ROWS and pos.y >= 0 and pos.y < tp.GRID_COLS:
+			if not tp.is_cell_occupied(pos.x, pos.y):
+				return pos
+
+	# Fallback: return position left of player even if occupied
+	return Vector2i(player_pos.x, max(0, player_pos.y - 1))
+
 func create_timeline_entities(tp: Panel):
 	"""Create entity visuals for a timeline panel using grid-based positioning"""
 	print("\n=== Creating entities for ", tp.timeline_type, " timeline ===")
@@ -394,19 +463,40 @@ func create_timeline_entities(tp: Panel):
 			print("  Enemy ", i, " placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
 
 	# Create player entity using grid positioning
+	var player_grid_pos = Vector2i(-1, -1)
 	if tp.state.has("player"):
 		var player_entity = ENTITY_SCENE.instantiate()
 		player_entity.setup(tp.state["player"], true, tp.timeline_type)
 
 		# Get grid position for player
-		var grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
-		var world_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+		player_grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
+		var world_pos = tp.get_cell_center_position(player_grid_pos.x, player_grid_pos.y)
 
 		player_entity.position = world_pos
 		tp.add_child(player_entity)
 		tp.entities.append(player_entity)
 
-		print("  Player placed at grid (", grid_pos.x, ", ", grid_pos.y, ") -> world ", world_pos)
+		print("  Player placed at grid (", player_grid_pos.x, ", ", player_grid_pos.y, ") -> world ", world_pos)
+
+	# Create twin entity if it exists
+	if tp.state.has("twin"):
+		var twin_entity = ENTITY_SCENE.instantiate()
+		twin_entity.setup(tp.state["twin"], true, tp.timeline_type)  # is_player=true for similar visual
+
+		# Place twin directly to the left of player (same row, col-1)
+		var twin_grid_pos = Vector2i(player_grid_pos.x, player_grid_pos.y - 1)
+
+		# Ensure twin is within grid bounds
+		if twin_grid_pos.y < 0:
+			twin_grid_pos.y = 0  # Can't go further left, place at leftmost column
+
+		var world_pos = tp.get_cell_center_position(twin_grid_pos.x, twin_grid_pos.y)
+
+		twin_entity.position = world_pos
+		tp.add_child(twin_entity)
+		tp.entities.append(twin_entity)
+
+		print("  Twin placed at grid (", twin_grid_pos.x, ", ", twin_grid_pos.y, ") -> world ", world_pos)
 
 	print("  Created ", tp.entities.size(), " entities")
 
@@ -440,14 +530,17 @@ func create_timeline_arrows(tp: Panel):
 			print("  Created enemy → player arrows")
 
 func create_player_attack_arrows(tp: Panel):
-	"""Create arrow from player to leftmost enemy (grid-based targeting)"""
+	"""Create arrows from player and twin to leftmost enemy (grid-based targeting)"""
 	var player_entity = null
+	var twin_entity = null
 
-	# Find player entity
+	# Find player and twin entities
 	for entity in tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
 
 	if not player_entity:
 		return
@@ -455,7 +548,11 @@ func create_player_attack_arrows(tp: Panel):
 	# Get leftmost enemy using grid-based targeting
 	var target_enemy = tp.get_leftmost_enemy()
 
-	if player_entity and target_enemy:
+	if not target_enemy:
+		return
+
+	# Create arrow from player to enemy
+	if player_entity:
 		var arrow = ARROW_SCENE.instantiate()
 		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
 		arrow.z_as_relative = true
@@ -466,22 +563,46 @@ func create_player_attack_arrows(tp: Panel):
 
 		tp.arrows.append(arrow)
 
+	# Create arrow from twin to enemy (if twin exists)
+	if twin_entity:
+		var twin_arrow = ARROW_SCENE.instantiate()
+		twin_arrow.z_index = 50
+		twin_arrow.z_as_relative = true
+		tp.add_child(twin_arrow)
+
+		var twin_curve = calculate_smart_curve(twin_entity.position, target_enemy.position)
+		twin_arrow.setup(twin_entity.position, target_enemy.position, twin_curve)
+
+		tp.arrows.append(twin_arrow)
+		print("  Created twin → enemy arrow")
+
 func create_enemy_attack_arrows(tp: Panel):
-	"""Create arrows from each enemy to player (or to other enemies if redirected)"""
+	"""Create arrows from each enemy to player/twin (or to other enemies if redirected)"""
 	var player_entity = null
+	var twin_entity = null
+
+	# Find player and twin entities
 	for entity in tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
 
 	if not player_entity:
 		return
+
+	# Determine default target: twin first (leftmost), then player
+	var default_target = twin_entity if twin_entity else player_entity
 
 	# Get enemy entities
 	var enemy_entities = []
 	for entity in tp.entities:
 		if not entity.is_player:
 			enemy_entities.append(entity)
+
+	# Track if twin is still alive for sequential targeting
+	var twin_alive = (twin_entity != null)
 
 	# Create arrows based on redirect/miss flags
 	for i in range(enemy_entities.size()):
@@ -493,22 +614,36 @@ func create_enemy_attack_arrows(tp: Panel):
 			continue
 
 		# Check if this enemy's attack is redirected
-		var target = player_entity
+		var target = null
 		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == i:
 			var to_index = future_redirect_flag.get("to_enemy", -1)
 			if to_index >= 0 and to_index < enemy_entities.size():
 				target = enemy_entities[to_index]
 				print("  Enemy ", i, " arrow redirected to enemy ", to_index)
+		else:
+			# Target twin first, then player when twin dies
+			if twin_alive:
+				target = twin_entity
+				# Check if twin would die from this attack (based on state)
+				if tp.state.has("twin"):
+					var twin_hp = tp.state["twin"]["hp"]
+					var enemy_damage = enemy.entity_data.get("damage", 0)
+					if twin_hp <= enemy_damage:
+						# Twin will die, next enemies target player
+						twin_alive = false
+			else:
+				target = player_entity
 
-		var arrow = ARROW_SCENE.instantiate()
-		arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
-		arrow.z_as_relative = true
-		tp.add_child(arrow)
+		if target:
+			var arrow = ARROW_SCENE.instantiate()
+			arrow.z_index = 50  # Above grid cells (z=0), below entities (z=100)
+			arrow.z_as_relative = true
+			tp.add_child(arrow)
 
-		var curve = calculate_smart_curve(enemy.position, target.position)
-		arrow.setup(enemy.position, target.position, curve)
+			var curve = calculate_smart_curve(enemy.position, target.position)
+			arrow.setup(enemy.position, target.position, curve)
 
-		tp.arrows.append(arrow)
+			tp.arrows.append(arrow)
 
 func calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 	"""Calculate arrow curve based on spatial relationship"""
@@ -825,6 +960,40 @@ func update_timer_display():
 	else:
 		timer_label.modulate = Color(1.0, 0.8, 0.4)  # Default yellow
 
+func create_targeting_status_label():
+	"""Create the targeting status label UI element"""
+	targeting_status_label = Label.new()
+	targeting_status_label.name = "TargetingStatusLabel"
+	targeting_status_label.visible = false
+
+	# Style the label
+	targeting_status_label.add_theme_font_size_override("font_size", 32)
+	targeting_status_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.5))
+	targeting_status_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.8))
+	targeting_status_label.add_theme_constant_override("outline_size", 3)
+
+	# Position at top center
+	targeting_status_label.anchor_left = 0.5
+	targeting_status_label.anchor_top = 0.1
+	targeting_status_label.anchor_right = 0.5
+	targeting_status_label.anchor_bottom = 0.1
+	targeting_status_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	targeting_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	ui_root.add_child(targeting_status_label)
+	print("Targeting status label created")
+
+func show_targeting_status(current: int, total: int, card_name: String):
+	"""Show and update the targeting status label"""
+	if targeting_status_label:
+		targeting_status_label.text = "%s: Select %d/%d targets" % [card_name, current, total]
+		targeting_status_label.visible = true
+
+func hide_targeting_status():
+	"""Hide the targeting status label"""
+	if targeting_status_label:
+		targeting_status_label.visible = false
+
 
 # ===== CARD SYSTEM =====
 
@@ -929,6 +1098,20 @@ func _on_card_played(card_data: Dictionary):
 		print("ERROR: Could not find source deck for card!")
 		return
 
+	# CHECK IF CARD REQUIRES TARGETING
+	if card_requires_targeting(card_data):
+		print("  🎯 Card requires targeting - entering targeting mode")
+		var card_node = source_deck.get_top_card()
+		enter_targeting_mode(card_data, card_node, source_deck)
+		return  # Don't apply effect yet - wait for target selection
+
+	# INSTANT EFFECT CARDS (no targeting required)
+
+	# Mark card as used immediately for visual feedback
+	var card_node = source_deck.get_top_card()
+	if card_node and is_instance_valid(card_node):
+		card_node.mark_as_used()
+
 	# Deduct time cost from timer
 	time_remaining -= time_cost
 	if time_remaining < 0:
@@ -944,32 +1127,32 @@ func _on_card_played(card_data: Dictionary):
 
 	# SIMPLIFIED: Recycle card immediately (no animation for now)
 	recycle_card_simple(source_deck)
-	
+
 	# Recalculate Future to show card effects
 	calculate_future_state()
-	
+
 	# Update Future timeline visuals
 	var future_tp = get_timeline_panel("future")
 	create_timeline_entities(future_tp)
 	create_timeline_arrows(future_tp)
 	update_timeline_ui_visibility(future_tp)
-	
+
 	# Update Present visuals (for healing, damage boosts, etc.)
 	var present_tp = get_timeline_panel("present")
 	create_timeline_entities(present_tp)
 	create_timeline_arrows(present_tp)
 	update_timeline_ui_visibility(present_tp)
-	
+
 	# CRITICAL: Also update Decorative Future
 	var dec_future_tp = get_timeline_panel("decorative")
 	if dec_future_tp and dec_future_tp.timeline_type == "decorative":
 		# Recalculate decorative future based on updated Future
 		dec_future_tp.state = calculate_future_from_state(future_tp.state)
 		create_timeline_entities(dec_future_tp)
-	
+
 	# Update damage display in UI
 	update_damage_display()
-	
+
 	print("  ✅ Card effect applied and visuals updated")
 
 func apply_card_effect(card_data: Dictionary):
@@ -1028,19 +1211,23 @@ func apply_card_effect(card_data: Dictionary):
 		
 		CardDatabase.EffectType.SUMMON_PAST_TWIN:
 			if past_tp and not past_tp.state.is_empty():
-				# Create twin entity data (0.5x damage, 2x damage taken)
+				print("\n🔄 Summoning Past Twin")
+
+				# Create twin entity data based on PAST player stats
 				var twin_data = {
 					"name": "Past Twin",
-					"hp": past_tp.state["player"]["hp"] / 2,  # Half HP for balance
-					"max_hp": past_tp.state["player"]["max_hp"] / 2,
-					"damage": past_tp.state["player"]["damage"] / 2,  # 0.5x damage
-					"is_twin": true,
-					"damage_multiplier": 2.0  # Takes 2x damage
+					"hp": int(past_tp.state["player"]["hp"] * 0.5),  # 0.5x HP from PAST
+					"max_hp": int(past_tp.state["player"]["max_hp"] * 0.5),
+					"damage": int(past_tp.state["player"]["damage"] * 0.5),  # 0.5x damage from PAST
+					"is_twin": true
 				}
-				# Add as an ally (TODO: Will need special logic in combat)
-				print("Summoned Past Twin with ", twin_data["hp"], " HP and ", twin_data["damage"], " damage")
-				# For now, just boost player damage by twin's damage
-				present_tp.state["player"]["damage"] += int(twin_data["damage"])
+
+				print("  Twin stats: HP=", twin_data["hp"], " DMG=", twin_data["damage"])
+
+				# Add twin to PRESENT state
+				present_tp.state["twin"] = twin_data
+
+				print("  ✅ Past Twin summoned to fight alongside you!")
 		
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			if past_tp and not past_tp.state.is_empty() and past_tp.state["enemies"].size() > 0:
@@ -1222,14 +1409,23 @@ func reveal_top_card(deck: CardDeck):
 func reset_turn_effects():
 	"""Reset temporary effects at end of turn"""
 	var present_tp = get_timeline_panel("present")
-	
+
 	# Reset damage boost
 	if damage_boost_active:
 		present_tp.state["player"]["damage"] = base_player_damage
 		damage_boost_active = false
 		update_damage_display()  # Update UI
 		print("  Damage boost reset to base: ", base_player_damage)
-	
+
+	# Remove twin from PRESENT after combat
+	# var present_tp = get_timeline_panel("present")
+	if present_tp and present_tp.state.has("twin"):
+		print("  Removing twin from PRESENT after combat")
+		present_tp.state.erase("twin")
+		# Update PRESENT visuals to remove twin entity
+		create_timeline_entities(present_tp)
+		create_timeline_arrows(present_tp)
+
 	# Clear Future manipulation flags
 	future_miss_flags.clear()
 	future_redirect_flag = null
@@ -1311,15 +1507,38 @@ func apply_screen_shake(strength: float = 10.0):
 func calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 	"""Calculate future state from any given state"""
 	var future = base_state.duplicate(true)
-	
+
 	if future["enemies"].size() > 0:
+		# Player attacks first enemy
 		var target_enemy = future["enemies"][0]
 		target_enemy["hp"] -= future["player"]["damage"]
+
+		# Twin also attacks first enemy if twin exists
+		if future.has("twin"):
+			target_enemy["hp"] -= future["twin"]["damage"]
+			print("  Twin deals ", future["twin"]["damage"], " damage to enemy")
+
+		# Remove defeated enemies
 		future["enemies"] = future["enemies"].filter(func(e): return e["hp"] > 0)
-		
+
+		# Enemies counter-attack
+		# If twin exists, enemies attack twin first (leftmost)
+		var twin_alive = future.has("twin")
 		for enemy in future["enemies"]:
-			future["player"]["hp"] -= enemy["damage"]
-	
+			if twin_alive:
+				# Attack twin
+				future["twin"]["hp"] -= enemy["damage"]
+				print("  Enemy deals ", enemy["damage"], " damage to twin (HP: ", future["twin"]["hp"], ")")
+
+				# Check if twin died
+				if future["twin"]["hp"] <= 0:
+					print("  Twin defeated!")
+					future.erase("twin")
+					twin_alive = false
+			else:
+				# Attack player
+				future["player"]["hp"] -= enemy["damage"]
+
 	return future
 
 func rotate_timeline_panels_7():
@@ -1370,10 +1589,37 @@ func execute_complete_turn():
 	# CRITICAL: Check for game over BEFORE recalculating future
 	var present_tp = timeline_panels[2]
 	if present_tp.state["player"]["hp"] <= 0:
-		print("\n💀 GAME OVER - Player died!")
-		handle_game_over()
-		return  # Stop turn execution
-	
+		# If conscription is active, the conscripted enemy died - not game over
+		if conscription_active:
+			print("\n💀 Conscripted enemy died - restoring original player")
+			# Restore original player
+			present_tp.state["player"] = original_player_data.duplicate(true)
+			conscription_active = false
+			original_player_data = {}
+			conscripted_enemy_data = {}
+			print("  ✅ Player restored: HP=", present_tp.state["player"]["hp"], " DMG=", present_tp.state["player"]["damage"])
+
+			# Update visuals to show restored player
+			create_timeline_entities(present_tp)
+			create_timeline_arrows(present_tp)
+		else:
+			# Real player died - game over
+			print("\n💀 GAME OVER - Player died!")
+			handle_game_over()
+			return  # Stop turn execution
+	elif conscription_active:
+		# Conscripted enemy survived - restore player anyway
+		print("\n✅ Conscripted enemy survived - restoring original player")
+		present_tp.state["player"] = original_player_data.duplicate(true)
+		conscription_active = false
+		original_player_data = {}
+		conscripted_enemy_data = {}
+		print("  ✅ Player restored: HP=", present_tp.state["player"]["hp"], " DMG=", present_tp.state["player"]["damage"])
+
+		# Update visuals to show restored player
+		create_timeline_entities(present_tp)
+		create_timeline_arrows(present_tp)
+
 	# PHASE 4: Recalculate Future and Decorative Future
 	print("\n🔮 PHASE 5: Recalculate Future timelines")
 	recalculate_future_timelines()
@@ -1600,24 +1846,30 @@ func execute_combat_animations():
 	# Track if any enemy died during combat
 	var enemies_before = present_tp.state.get("enemies", []).size()
 	
+	# Twin attacks first (leftmost entity)
+	if present_tp.state.has("twin"):
+		print("  ⚔️ Twin attacking...")
+		await animate_twin_attack()
+		await get_tree().create_timer(0.2).timeout
+
 	# Player attacks
 	print("  ⚔️ Player attacking...")
 	await animate_player_attack()
-	
+
 	await get_tree().create_timer(0.2).timeout
-	
+
 	# Check if enemy died
 	var enemies_after_player = present_tp.state.get("enemies", []).size()
 	var enemy_died_during_player_attack = enemies_after_player < enemies_before
-	
+
 	# Enemies attack (if any left)
 	if present_tp.state.get("enemies", []).size() > 0:
 		print("  ⚔️ Enemies attacking...")
 		await animate_enemy_attacks()
-	
+
 	print("  ✅ Combat complete!")
 	print("    Player HP after: ", present_tp.state.get("player", {}).get("hp", 0))
-	
+
 	# NOW reposition enemies if any died during combat
 	if enemy_died_during_player_attack:
 		print("  ↔️ Enemy died during combat - repositioning remaining enemies...")
@@ -1630,9 +1882,9 @@ func animate_player_attack() -> void:
 	# Find player and target enemy
 	var player_entity = null
 	var target_enemy = null
-	
+
 	for entity in present_tp.entities:
-		if entity.is_player:
+		if entity.is_player and not entity.entity_data.get("is_twin", false):
 			player_entity = entity
 		elif target_enemy == null:
 			target_enemy = entity
@@ -1700,22 +1952,102 @@ func animate_player_attack() -> void:
 	
 	print("  Player attack complete!")
 
+func animate_twin_attack() -> void:
+	"""Animate twin attacking leftmost enemy in Present"""
+	var present_tp = timeline_panels[2]
+
+	# Find twin and target enemy
+	var twin_entity = null
+	var target_enemy = null
+
+	for entity in present_tp.entities:
+		if entity.is_player and entity.entity_data.get("is_twin", false):
+			twin_entity = entity
+		elif target_enemy == null and not entity.is_player:
+			target_enemy = entity
+
+	if not twin_entity or not target_enemy:
+		print("  Cannot animate - missing twin or enemy")
+		return
+
+	# Store original position
+	var original_pos = twin_entity.position
+	var target_pos = target_enemy.position
+
+	# Calculate attack position
+	var direction = (target_pos - original_pos).normalized()
+	var attack_pos = target_pos - direction * 50.0
+
+	print("  Twin attack animation starting...")
+
+	# Dash to enemy
+	var tween = create_tween()
+	tween.tween_property(twin_entity, "position", attack_pos, 0.3).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	await tween.finished
+
+	# APPLY DAMAGE AT IMPACT
+	if present_tp.state["enemies"].size() > 0 and present_tp.state.has("twin"):
+		var target_enemy_data = present_tp.state["enemies"][0]
+		var damage = present_tp.state["twin"]["damage"]
+		target_enemy_data["hp"] -= damage
+		print("  Twin dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
+
+		# Play attack sound
+		twin_entity.play_attack_sound()
+
+		# Screen shake
+		apply_screen_shake(damage * 0.5)
+
+		# Hit reaction
+		var hit_direction = (target_enemy.position - twin_entity.position).normalized()
+		target_enemy.play_hit_reaction(hit_direction)
+
+		# Update visual
+		target_enemy.entity_data = target_enemy_data
+		target_enemy.update_display()
+
+		# Remove enemy if dead
+		if target_enemy_data["hp"] <= 0:
+			print("  ", target_enemy_data["name"], " defeated by twin!")
+			present_tp.state["enemies"].remove_at(0)
+			present_tp.entities.erase(target_enemy)
+			target_enemy.visible = false
+
+			# Queue for deletion
+			get_tree().create_timer(1.5).timeout.connect(func():
+				if is_instance_valid(target_enemy):
+					target_enemy.queue_free()
+			)
+
+	# Pause at enemy
+	await get_tree().create_timer(0.1).timeout
+
+	# Dash back
+	var tween2 = create_tween()
+	tween2.tween_property(twin_entity, "position", original_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	await tween2.finished
+
+	print("  Twin attack complete!")
+
 
 func animate_enemy_attacks() -> void:
-	"""Animate all enemies attacking player sequentially"""
+	"""Animate all enemies attacking twin/player sequentially"""
 	var present_tp = timeline_panels[2]
-	
-	# Find player
+
+	# Find player and twin
 	var player_entity = null
+	var twin_entity = null
 	for entity in present_tp.entities:
 		if entity.is_player:
-			player_entity = entity
-			break
-	
+			if entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+			else:
+				player_entity = entity
+
 	if not player_entity:
 		print("  Cannot animate - missing player")
 		return
-	
+
 	# Get all enemies with data
 	var enemy_list = []
 	for i in range(present_tp.state["enemies"].size()):
@@ -1724,60 +2056,97 @@ func animate_enemy_attacks() -> void:
 			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
 				enemy_list.append({"node": entity, "data": enemy_data, "index": i})
 				break
-	
+
 	if enemy_list.size() == 0:
 		return
-	
+
 	print("  Enemy attacks starting...")
-	
+
+	# Track if twin is still alive
+	var twin_alive = (twin_entity != null and present_tp.state.has("twin"))
+
 	# Animate each enemy sequentially
 	for enemy_info in enemy_list:
 		var enemy_index = enemy_info["index"]
-		
+
 		# CHECK MISS FLAGS
 		if future_miss_flags.get(enemy_index, false):
 			print("  Enemy ", enemy_index, " misses (Chaos Injection effect)")
 			continue
-		
+
+		# Determine target: twin first, then player
+		var target = null
+		var target_is_twin = false
+
 		# CHECK REDIRECT
-		var target = player_entity
 		if future_redirect_flag != null and future_redirect_flag.get("from_enemy", -1) == enemy_index:
 			var to_index = future_redirect_flag.get("to_enemy", -1)
 			if to_index >= 0 and to_index < enemy_list.size():
 				target = enemy_list[to_index]["node"]
 				print("  Enemy ", enemy_index, " attacks enemy ", to_index, " (Redirect effect)")
-		
-		await animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"])
-	
+		else:
+			# Target twin first (leftmost), then player
+			if twin_alive:
+				target = twin_entity
+				target_is_twin = true
+			else:
+				target = player_entity
+
+		await animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"], target_is_twin)
+
+		# Check if twin died from this attack
+		if target_is_twin and present_tp.state.has("twin"):
+			if present_tp.state["twin"]["hp"] <= 0:
+				print("  Twin defeated! Remaining enemies will attack player.")
+				twin_alive = false
+				# Remove twin from entities
+				if twin_entity and is_instance_valid(twin_entity):
+					present_tp.entities.erase(twin_entity)
+					twin_entity.visible = false
+					get_tree().create_timer(1.0).timeout.connect(func():
+						if is_instance_valid(twin_entity):
+							twin_entity.queue_free()
+					)
+				twin_entity = null
+
 	print("  All enemy attacks complete!")
 
 
-func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary) -> void:
-	"""Animate single enemy attacking target (player or another enemy)"""
+func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary, target_is_twin: bool = false) -> void:
+	"""Animate single enemy attacking target (player, twin, or another enemy)"""
 	var present_tp = timeline_panels[2]
-	
+
 	var original_pos = enemy.position
 	var target_pos = target.position
 	var direction = (target_pos - original_pos).normalized()
 	var attack_pos = target_pos - direction * 50.0
-	
+
 	# Dash to target
 	var tween = create_tween()
 	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await tween.finished
-	
+
 	# APPLY DAMAGE AT IMPACT
 	var damage = enemy_data["damage"]
-	
-	# Check if target is player or enemy
+
+	# Check if target is player, twin, or enemy
 	if target.is_player:
-		# Attacking player
-		present_tp.state["player"]["hp"] -= damage
-		print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
-		
-		# Update player visual
-		target.entity_data = present_tp.state["player"]
-		target.update_display()
+		if target_is_twin:
+			# Attacking twin
+			present_tp.state["twin"]["hp"] -= damage
+			print("  ", enemy_data["name"], " dealt ", damage, " damage to twin! Twin HP: ", present_tp.state["twin"]["hp"])
+
+			# Update twin visual
+			target.entity_data = present_tp.state["twin"]
+			target.update_display()
+		else:
+			# Attacking player
+			present_tp.state["player"]["hp"] -= damage
+			print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_tp.state["player"]["hp"])
+
+			# Update player visual
+			target.entity_data = present_tp.state["player"]
+			target.update_display()
 	else:
 		# Attacking another enemy (redirect)
 		# Find target enemy in state
@@ -1785,11 +2154,11 @@ func animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dict
 			if enemy_state["name"] == target.entity_data["name"]:
 				enemy_state["hp"] -= damage
 				print("  ", enemy_data["name"], " dealt ", damage, " damage to ", enemy_state["name"], "! Enemy HP: ", enemy_state["hp"])
-				
+
 				# Update enemy visual
 				target.entity_data = enemy_state
 				target.update_display()
-				
+
 				# Remove if dead
 				if enemy_state["hp"] <= 0:
 					print("  ", enemy_state["name"], " defeated by redirect!")
@@ -1925,19 +2294,402 @@ func enable_all_card_input():
 			if not top_card.is_used:
 				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
 
+# ===== TARGETING MODE SYSTEM =====
+
+func card_requires_targeting(card_data: Dictionary) -> bool:
+	"""Check if a card requires target selection"""
+	var effect_type = card_data.get("effect_type")
+
+	# Cards that require targeting
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			return true  # Select which enemy to damage
+		CardDatabase.EffectType.ENEMY_SWAP:
+			return true  # Select two enemies to swap
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			return true  # Select source enemy and target
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			return true  # Select which enemy to transfer wounds from
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			return true  # Select enemy in PAST to swap with player
+		_:
+			return false
+
+func get_required_target_count(card_data: Dictionary) -> int:
+	"""Get number of targets required for this card"""
+	var effect_type = card_data.get("effect_type")
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			return 1  # One enemy
+		CardDatabase.EffectType.ENEMY_SWAP:
+			return 2  # Two enemies
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			return 2  # Source enemy and target enemy
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			return 1  # One enemy
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			return 1  # One enemy in PAST
+		_:
+			return 0
+
+func get_valid_target_timelines(card_data: Dictionary) -> Array:
+	"""Get array of timeline types that can be targeted for this card
+	Returns array of strings: ["past"], ["present"], ["future"], or combinations
+	"""
+	var effect_type = card_data.get("effect_type")
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			# Chrono Strike - ONLY PRESENT enemies
+			return ["present"]
+
+		CardDatabase.EffectType.ENEMY_SWAP:
+			# Enemy Swap - ONLY PRESENT enemies
+			return ["present"]
+
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			# Redirect Attack - ONLY PRESENT enemies (affects Future)
+			return ["present"]
+
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			# Wound Transfer - ONLY PAST enemies
+			return ["past"]
+
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			# Conscript Enemy - ONLY PAST enemies
+			return ["past"]
+
+		_:
+			# Default: all timelines
+			return ["past", "present", "future"]
+
+func enter_targeting_mode(card_data: Dictionary, card_node: Node, source_deck: CardDeck):
+	"""Enter targeting mode for a card"""
+	print("\n🎯 ENTERING TARGETING MODE")
+	print("  Card: ", card_data.get("name", "Unknown"))
+
+	targeting_mode_active = true
+	targeting_card_data = card_data
+	targeting_card_node = card_node
+	targeting_source_deck = source_deck
+	selected_targets = []
+	required_target_count = get_required_target_count(card_data)
+	valid_target_timelines = get_valid_target_timelines(card_data)
+
+	# Set card visual state
+	if card_node:
+		card_node.enter_targeting_mode()
+
+	# Disable all other cards
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card) and top_card != card_node:
+			top_card.disable_for_targeting()
+
+	# Highlight valid targets based on card effect
+	highlight_valid_targets_for_card(card_data)
+
+	# Enable entity targeting
+	enable_entity_targeting()
+
+	# Show targeting status UI
+	show_targeting_status(0, required_target_count, card_data.get("name", "Unknown"))
+
+	print("  Required targets: ", required_target_count)
+	print("  ✅ Targeting mode active")
+
+func cancel_targeting_mode():
+	"""Cancel targeting mode and restore normal state"""
+	print("\n❌ CANCELING TARGETING MODE")
+
+	if not targeting_mode_active:
+		return
+
+	targeting_mode_active = false
+	selected_targets = []
+
+	# Restore card visual states (but keep selected card highlighted until it's used)
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			# Keep the selected card highlighted, restore others
+			if top_card == targeting_card_node:
+				# Keep selected card highlighted but restore normal interaction
+				top_card.card_state = top_card.CardState.NORMAL
+				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
+			else:
+				top_card.exit_targeting_mode()
+
+	# Clear highlights
+	clear_all_target_highlights()
+
+	# Disable entity targeting
+	disable_entity_targeting()
+
+	# Hide targeting status UI
+	hide_targeting_status()
+
+	# Clear targeting variables
+	targeting_card_data = {}
+	targeting_card_node = null
+	targeting_source_deck = null
+	required_target_count = 0
+
+	print("  ✅ Targeting mode canceled")
+
+func on_target_selected(target):
+	"""Handle when a target is selected (entity or cell)"""
+	if not targeting_mode_active:
+		return
+
+	# Validate that the target is from a valid timeline
+	if target is Node2D:  # Entity
+		var target_timeline = target.timeline_type
+		if target_timeline not in valid_target_timelines:
+			print("❌ Invalid target: ", target.entity_data.get("name", "Unknown"), " is in ", target_timeline, " (valid: ", valid_target_timelines, ")")
+			# Don't mark click as handled - this will cancel targeting
+			return
+
+	# Mark that this click was handled by a valid target
+	targeting_click_handled = true
+
+	print("🎯 Target selected: ", target)
+
+	# Add to selected targets
+	selected_targets.append(target)
+
+	# Visual feedback for selected target
+	if target is Node2D:  # Entity
+		target.mark_as_targeted()
+
+	# Update targeting status UI
+	var card_name = targeting_card_data.get("name", "Unknown")
+	show_targeting_status(selected_targets.size(), required_target_count, card_name)
+
+	print("  Selected ", selected_targets.size(), "/", required_target_count, " targets")
+
+	# Check if we have all required targets
+	if selected_targets.size() >= required_target_count:
+		complete_targeting()
+
+func complete_targeting():
+	"""All targets selected - apply card effect and finish"""
+	print("\n✅ TARGETING COMPLETE")
+	print("  Applying effect with targets: ", selected_targets)
+
+	# Validate that player still has enough time
+	var time_cost = targeting_card_data.get("time_cost", 0)
+	if time_remaining < time_cost:
+		print("❌ Not enough time! Card cost: ", time_cost, ", Time remaining: ", time_remaining)
+
+		# Play shake animation on the card
+		if targeting_card_node and is_instance_valid(targeting_card_node):
+			targeting_card_node.play_shake_animation()
+
+		# Cancel targeting mode
+		cancel_targeting_mode()
+		return
+
+	# Deduct time cost
+	time_remaining -= time_cost
+	if time_remaining < 0:
+		time_remaining = 0
+	update_timer_display()
+
+	# Update all cards' affordability
+	update_all_cards_affordability()
+
+	# Apply card effect with targets
+	apply_card_effect_with_targets(targeting_card_data, selected_targets)
+
+	# Recycle the card
+	if targeting_source_deck:
+		recycle_card_simple(targeting_source_deck)
+
+	# Recalculate Future to show card effects
+	calculate_future_state()
+
+	# Update timeline visuals
+	var future_tp = get_timeline_panel("future")
+	create_timeline_entities(future_tp)
+	create_timeline_arrows(future_tp)
+	update_timeline_ui_visibility(future_tp)
+
+	var present_tp = get_timeline_panel("present")
+	create_timeline_entities(present_tp)
+	create_timeline_arrows(present_tp)
+	update_timeline_ui_visibility(present_tp)
+
+	# Update damage display in UI
+	update_damage_display()
+
+	# Exit targeting mode
+	cancel_targeting_mode()
+
+	print("  ✅ Card effect applied and targeting complete")
+
+func highlight_valid_targets_for_card(card_data: Dictionary):
+	"""Highlight valid targets based on card effect type and valid timelines"""
+	var valid_timelines = get_valid_target_timelines(card_data)
+
+	# Iterate through all panels and highlight entities in valid timelines
+	for panel in timeline_panels:
+		# Check if this panel's timeline is valid for targeting
+		if panel.timeline_type in valid_timelines:
+			for entity in panel.entities:
+				if is_instance_valid(entity) and not entity.is_player:
+					entity.show_as_valid_target()
+
+func clear_all_target_highlights():
+	"""Clear all target highlights from all panels"""
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity):
+				entity.clear_target_visuals()
+		panel.clear_all_highlights()
+
+func enable_entity_targeting():
+	"""Enable clicking on entities for targeting"""
+	# Enable targeting on all entities across all timelines
+	# (only highlighted ones will be visibly clickable)
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity) and not entity.is_player:
+				entity.enable_targeting(self)
+
+func disable_entity_targeting():
+	"""Disable clicking on entities"""
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity):
+				entity.disable_targeting()
+
+func apply_card_effect_with_targets(card_data: Dictionary, targets: Array):
+	"""Apply card effect using selected targets"""
+	var present_tp = get_timeline_panel("present")
+	var effect_type = card_data.get("effect_type")
+	var effect_value = card_data.get("effect_value", 0)
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			# Damage the selected enemy
+			if targets.size() > 0 and is_instance_valid(targets[0]):
+				var target_entity = targets[0]
+				# Find enemy in state
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == target_entity.entity_data["name"]:
+						present_tp.state["enemies"][i]["hp"] -= effect_value
+						print("Dealt ", effect_value, " damage to ", present_tp.state["enemies"][i]["name"])
+						if present_tp.state["enemies"][i]["hp"] <= 0:
+							present_tp.state["enemies"].remove_at(i)
+							print("  Enemy defeated!")
+						break
+
+		CardDatabase.EffectType.ENEMY_SWAP:
+			# Swap two enemies
+			if targets.size() >= 2 and is_instance_valid(targets[0]) and is_instance_valid(targets[1]):
+				var enemy1_name = targets[0].entity_data["name"]
+				var enemy2_name = targets[1].entity_data["name"]
+				var idx1 = -1
+				var idx2 = -1
+
+				# Find indices in state
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == enemy1_name:
+						idx1 = i
+					if present_tp.state["enemies"][i]["name"] == enemy2_name:
+						idx2 = i
+
+				# Swap
+				if idx1 >= 0 and idx2 >= 0:
+					var temp = present_tp.state["enemies"][idx1]
+					present_tp.state["enemies"][idx1] = present_tp.state["enemies"][idx2]
+					present_tp.state["enemies"][idx2] = temp
+					print("Swapped ", enemy1_name, " and ", enemy2_name)
+
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			# Set redirect flag
+			if targets.size() >= 2:
+				var source_enemy = targets[0]
+				var target_enemy = targets[1]
+				var source_idx = -1
+				var target_idx = -1
+
+				# Find indices
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == source_enemy.entity_data["name"]:
+						source_idx = i
+					if present_tp.state["enemies"][i]["name"] == target_enemy.entity_data["name"]:
+						target_idx = i
+
+				if source_idx >= 0 and target_idx >= 0:
+					future_redirect_flag = {
+						"from_enemy": source_idx,
+						"to_enemy": target_idx
+					}
+					print("Future: Enemy ", source_idx, " will attack Enemy ", target_idx)
+
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			# Calculate and apply wound transfer
+			var past_tp = get_timeline_panel("past")
+			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
+				var target_entity = targets[0]
+				var target_name = target_entity.entity_data["name"]
+
+				# Find matching enemy in Past and Present
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == target_name:
+						# Find in past
+						for past_enemy in past_tp.state.get("enemies", []):
+							if past_enemy["name"] == target_name:
+								var damage_taken = past_enemy["hp"] - present_tp.state["enemies"][i]["hp"]
+								if damage_taken > 0:
+									present_tp.state["enemies"][i]["hp"] -= damage_taken
+									print("Transferred ", damage_taken, " wound damage to ", target_name)
+									if present_tp.state["enemies"][i]["hp"] <= 0:
+										present_tp.state["enemies"].remove_at(i)
+								break
+						break
+
+		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
+			# Conscript enemy from PAST to swap with player
+			var past_tp = get_timeline_panel("past")
+			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
+				var target_entity = targets[0]
+				var conscripted_data = target_entity.entity_data.duplicate()
+
+				print("🔄 Conscripting ", conscripted_data["name"], " to fight in player's place")
+
+				# Store original player data (for restoration after combat)
+				original_player_data = present_tp.state["player"].duplicate(true)
+				print("  Stored original player: HP=", original_player_data["hp"], " DMG=", original_player_data["damage"])
+
+				# Replace player with conscripted enemy in PRESENT
+				conscripted_enemy_data = conscripted_data.duplicate()
+				conscripted_enemy_data["name"] = "Conscripted " + conscripted_data["name"]
+				conscripted_enemy_data["is_conscripted_enemy"] = true  # Flag for visual rendering as enemy
+				present_tp.state["player"] = conscripted_enemy_data.duplicate()
+
+				# Mark conscription as active
+				conscription_active = true
+
+				print("  ✅ Player replaced with ", conscripted_enemy_data["name"])
+				print("  Conscripted stats: HP=", conscripted_enemy_data["hp"], " DMG=", conscripted_enemy_data.get("damage", 0))
+
 func handle_game_over():
 	"""Handle player death - disable all inputs"""
 	game_over = true
-	
+
 	# Disable Play button
 	play_button.disabled = true
 	play_button.text = "GAME OVER"
-	
+
 	# Disable all cards permanently
 	disable_all_card_input()
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
 			top_card.mark_as_used()  # Gray out all top cards
-	
+
 	print("💀 All controls disabled - Game Over!")

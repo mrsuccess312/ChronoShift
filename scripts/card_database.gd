@@ -44,26 +44,28 @@ static func get_all_cards() -> Array:
 			"effect_value": 0,
 			"time_cost": 8
 		},
-		# {
-		# 	"id": "summon_twin",
-		# 	"name": "Summon Past Twin",
-		# 	"description": "Call your past self: 0.5x damage, 2x damage taken",
-		# 	"timeline_type": TimelineType.PAST,
-		# 	"effect_type": EffectType.SUMMON_PAST_TWIN,
-		# 	"effect_value": 0
-		# },
-		# {
-		# 	"id": "conscript_enemy",
-		# 	"name": "Conscript Past Enemy",
-		# 	"description": "Past enemy fights for you this turn",
-		# 	"timeline_type": TimelineType.PAST,
-		# 	"effect_type": EffectType.CONSCRIPT_PAST_ENEMY,
-		# 	"effect_value": 0
-		# },
+		{
+			"id": "conscript_enemy",
+			"name": "Conscript Past Enemy",
+			"description": "Enemy fights for you this turn",
+			"timeline_type": TimelineType.PAST,
+			"effect_type": EffectType.CONSCRIPT_PAST_ENEMY,
+			"effect_value": 0,
+			"time_cost": 12
+		},
+		{
+			"id": "summon_twin",
+			"name": "Summon Past Twin",
+			"description": "Past self fights: 0.5x damage, 0.5x HP",
+			"timeline_type": TimelineType.PAST,
+			"effect_type": EffectType.SUMMON_PAST_TWIN,
+			"effect_value": 0,
+			"time_cost": 10
+		},
 		{
 			"id": "wound_transfer",
 			"name": "Wound Transfer",
-			"description": "Deal damage equal to enemy's wounds from Past",
+			"description": "Click enemy in PAST to deal matching damage",
 			"timeline_type": TimelineType.PAST,
 			"effect_type": EffectType.WOUND_TRANSFER,
 			"effect_value": 0,
@@ -74,7 +76,7 @@ static func get_all_cards() -> Array:
 		{
 			"id": "chrono_strike",
 			"name": "Chrono Strike",
-			"description": "Deal 25 damage to leftmost enemy",
+			"description": "Click enemy in PRESENT to deal 25 damage",
 			"timeline_type": TimelineType.PRESENT,
 			"effect_type": EffectType.DAMAGE_ENEMY,
 			"effect_value": 25,
