@@ -2416,7 +2416,7 @@ func cancel_targeting_mode():
 			# Keep the selected card highlighted, restore others
 			if top_card == targeting_card_node:
 				# Keep selected card highlighted but restore normal interaction
-				top_card.card_state = Card.CardState.NORMAL
+				top_card.card_state = top_card.CardState.NORMAL
 				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
 			else:
 				top_card.exit_targeting_mode()
