@@ -376,11 +376,41 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
 				var target_entity = targets[0]
-				var conscripted_data = target_entity.entity_data.duplicate()
+				var conscripted_data = target_entity.entity_data.duplicate(true)
 
 				print("🔄 Conscripting ", conscripted_data["name"], " to fight in player's place")
+
+				# Store original player data for restoration after combat
 				GameState.original_player_data = present_tp.state["player"].duplicate(true)
-				print("  Stored original player: HP=", GameState.original_player_data["hp"])
+				GameState.conscripted_enemy_data = conscripted_data.duplicate(true)
+				GameState.conscription_active = true
+
+				print("  Stored original player: HP=", GameState.original_player_data["hp"], " DMG=", GameState.original_player_data["damage"])
+
+				# Swap in Present: Replace player with conscripted enemy
+				present_tp.state["player"] = conscripted_data
+				present_tp.state["player"].erase("is_enemy")  # It's now the player
+
+				# Swap in Past: Replace the enemy with player at that position
+				for i in range(past_tp.state["enemies"].size()):
+					if past_tp.state["enemies"][i]["name"] == conscripted_data["name"]:
+						past_tp.state["enemies"][i] = GameState.original_player_data.duplicate(true)
+						past_tp.state["enemies"][i]["name"] = "You (Past)"
+
+						# Update visual for swapped enemy in Past
+						var past_entity = _find_entity_by_name(past_tp, conscripted_data["name"])
+						if past_entity:
+							past_entity.entity_data = past_tp.state["enemies"][i]
+							past_entity.update_display()
+						break
+
+				# Update visual for player in Present
+				var player_entity = _find_player_entity(present_tp)
+				if player_entity:
+					player_entity.entity_data = present_tp.state["player"]
+					player_entity.update_display()
+
+				print("  ✅ Swap complete: Enemy now fights as player, player appears in Past")
 
 
 ## Recycle used card back to deck
@@ -554,4 +584,26 @@ func _get_timeline_panel(timeline_type: String):
 	for panel in timeline_panels:
 		if panel.timeline_type == timeline_type:
 			return panel
+	return null
+
+
+## Find entity by name in a panel
+func _find_entity_by_name(panel, entity_name: String):
+	if not panel or not panel.has("entities"):
+		return null
+
+	for entity in panel.entities:
+		if entity.entity_data.get("name", "") == entity_name:
+			return entity
+	return null
+
+
+## Find player entity in a panel
+func _find_player_entity(panel):
+	if not panel or not panel.has("entities"):
+		return null
+
+	for entity in panel.entities:
+		if entity.is_player and not entity.entity_data.get("is_twin", false):
+			return entity
 	return null

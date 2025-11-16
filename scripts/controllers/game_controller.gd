@@ -331,7 +331,42 @@ func _execute_complete_turn() -> void:
 	var present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel)
 
+	# Phase 3.5: Remove twin after combat (if still alive)
+	if present_panel.state.has("twin"):
+		print("  🗑️ Removing twin after combat...")
+		var twin_entity = null
+		for entity in present_panel.entities:
+			if entity.is_player and entity.entity_data.get("is_twin", false):
+				twin_entity = entity
+				break
+
+		if twin_entity and is_instance_valid(twin_entity):
+			present_panel.entities.erase(twin_entity)
+			twin_entity.queue_free()
+
+		present_panel.state.erase("twin")
+		print("  ✅ Twin removed")
+
 	# Phase 4: Turn effects and damage restoration
+	# Restore player if conscription was active
+	if GameState.conscription_active:
+		print("🔄 Restoring player after conscription...")
+		present_panel.state["player"] = GameState.original_player_data.duplicate(true)
+
+		# Update visual
+		var player_entity = null
+		for entity in present_panel.entities:
+			if entity.is_player and not entity.entity_data.get("is_twin", false):
+				player_entity = entity
+				break
+
+		if player_entity:
+			player_entity.entity_data = present_panel.state["player"]
+			player_entity.update_display()
+
+		print("  ✅ Player restored: HP=", present_panel.state["player"]["hp"], " DMG=", present_panel.state["player"]["damage"])
+		GameState.reset_conscription()
+
 	# Restore damage if boost was active
 	if GameState.damage_boost_active and GameState.original_damage_before_boost > 0:
 		present_panel.state["player"]["damage"] = GameState.original_damage_before_boost
@@ -341,7 +376,9 @@ func _execute_complete_turn() -> void:
 	GameState.reset_turn_effects()
 	GameState.increment_turn()
 
-	# Phase 5: Check game over
+	# Phase 5: Check game over (skip if conscription was active - enemy death is OK)
+	# Note: We check conscription_active BEFORE reset, but we already reset it above
+	# So we need to check if player HP is actually <= 0 in original data
 	if present_panel.state["player"]["hp"] <= 0:
 		GameState.set_game_over()
 		return
