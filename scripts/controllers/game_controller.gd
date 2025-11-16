@@ -197,12 +197,9 @@ func _apply_panel_styling(panel: Panel, timeline_type: String, i: int) -> void:
 			stylebox.border_color = Color(0.71, 0.48, 1, 1)
 			_update_panel_label_text(panel, "⟳ FUTURE")
 		"decorative":
-			if i == 0:
-				stylebox.bg_color = Color(0.24, 0.15, 0.08, 1)
-				stylebox.border_color = Color(0.55, 0.44, 0.28, 1)
-			else:
-				stylebox.bg_color = Color(0.18, 0.11, 0.24, 1)
-				stylebox.border_color = Color(0.71, 0.48, 1, 1)
+			# All decorative panels start with neutral gray/black colors
+			stylebox.bg_color = Color(0.1, 0.1, 0.1, 1)
+			stylebox.border_color = Color(0.3, 0.3, 0.3, 1)
 			_update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
@@ -367,6 +364,7 @@ func _carousel_slide_animation() -> void:
 	# Capture Past state from current Present
 	var slot_2_panel = timeline_panels[2]
 	var state_for_past = slot_2_panel.state.duplicate(true)
+	var state_for_new_present = slot_2_panel.state.duplicate(true)  # New Present keeps current state
 
 	# Rotate timeline panels array
 	var first_panel = timeline_panels.pop_front()
@@ -380,8 +378,15 @@ func _carousel_slide_animation() -> void:
 	timeline_panels[4].timeline_type = "decorative"
 	timeline_panels[5].timeline_type = "decorative"
 
-	# Assign states
+	# Assign states - CRITICAL: New Present gets actual current state, NOT predicted Future state
 	timeline_panels[1].state = state_for_past  # New Past gets old Present
+	timeline_panels[2].state = state_for_new_present  # New Present gets actual current state (NOT old Future!)
+
+	# Clear decorative panel states and entities
+	for i in [0, 4, 5]:
+		timeline_panels[i].state = {}
+		timeline_panels[i].clear_entities()
+		timeline_panels[i].clear_arrows()
 
 	# Animate panels to new positions
 	var tween = create_tween()
@@ -404,9 +409,8 @@ func _carousel_slide_animation() -> void:
 	# Update panel interactivity
 	_update_panel_mouse_filters()
 
-	# Restore UI
+	# Restore UI (but don't recreate entities/arrows yet - wait until after combat)
 	_show_ui_after_carousel()
-	_update_all_timeline_displays()
 
 	print("✅ Carousel slide complete")
 
