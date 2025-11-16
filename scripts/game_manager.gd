@@ -27,6 +27,14 @@ var temporary_entities = []  # Past Twins, Conscripted Enemies
 var future_miss_flags = {}  # { enemy_index: true } for enemies that will miss
 var future_redirect_flag = null  # { from_enemy: index, to_enemy: index }
 
+# ===== TARGETING MODE STATE =====
+var targeting_mode_active = false  # Whether we're in targeting mode
+var targeting_card_data = {}  # The card being played
+var targeting_card_node = null  # The card node that's targeting
+var targeting_source_deck = null  # Which deck the card came from
+var selected_targets = []  # Array of selected targets (entities or cells)
+var required_target_count = 0  # How many targets this card needs
+
 # ===== UI/UX SETTINGS =====
 var enable_panel_hover: bool = true  # Enable floating hover animation on panels
 var show_grid_lines: bool = false    # Show grid cell borders
@@ -142,6 +150,11 @@ func _input(event):
 	"""Handle global input events"""
 	if event.is_action_pressed("toggle_fullscreen"):
 		toggle_fullscreen()
+
+	# Handle ESC key to cancel targeting mode
+	if event.is_action_pressed("ui_cancel") and targeting_mode_active:
+		print("ESC pressed - canceling targeting mode")
+		cancel_targeting_mode()
 
 func toggle_fullscreen():
 	"""Switch between windowed and fullscreen mode"""
@@ -929,6 +942,20 @@ func _on_card_played(card_data: Dictionary):
 		print("ERROR: Could not find source deck for card!")
 		return
 
+	# CHECK IF CARD REQUIRES TARGETING
+	if card_requires_targeting(card_data):
+		print("  🎯 Card requires targeting - entering targeting mode")
+		var card_node = source_deck.get_top_card()
+		enter_targeting_mode(card_data, card_node, source_deck)
+		return  # Don't apply effect yet - wait for target selection
+
+	# INSTANT EFFECT CARDS (no targeting required)
+
+	# Mark card as used immediately for visual feedback
+	var card_node = source_deck.get_top_card()
+	if card_node and is_instance_valid(card_node):
+		card_node.mark_as_used()
+
 	# Deduct time cost from timer
 	time_remaining -= time_cost
 	if time_remaining < 0:
@@ -944,32 +971,32 @@ func _on_card_played(card_data: Dictionary):
 
 	# SIMPLIFIED: Recycle card immediately (no animation for now)
 	recycle_card_simple(source_deck)
-	
+
 	# Recalculate Future to show card effects
 	calculate_future_state()
-	
+
 	# Update Future timeline visuals
 	var future_tp = get_timeline_panel("future")
 	create_timeline_entities(future_tp)
 	create_timeline_arrows(future_tp)
 	update_timeline_ui_visibility(future_tp)
-	
+
 	# Update Present visuals (for healing, damage boosts, etc.)
 	var present_tp = get_timeline_panel("present")
 	create_timeline_entities(present_tp)
 	create_timeline_arrows(present_tp)
 	update_timeline_ui_visibility(present_tp)
-	
+
 	# CRITICAL: Also update Decorative Future
 	var dec_future_tp = get_timeline_panel("decorative")
 	if dec_future_tp and dec_future_tp.timeline_type == "decorative":
 		# Recalculate decorative future based on updated Future
 		dec_future_tp.state = calculate_future_from_state(future_tp.state)
 		create_timeline_entities(dec_future_tp)
-	
+
 	# Update damage display in UI
 	update_damage_display()
-	
+
 	print("  ✅ Card effect applied and visuals updated")
 
 func apply_card_effect(card_data: Dictionary):
@@ -1925,19 +1952,319 @@ func enable_all_card_input():
 			if not top_card.is_used:
 				top_card.mouse_filter = Control.MOUSE_FILTER_STOP
 
+# ===== TARGETING MODE SYSTEM =====
+
+func card_requires_targeting(card_data: Dictionary) -> bool:
+	"""Check if a card requires target selection"""
+	var effect_type = card_data.get("effect_type")
+
+	# Cards that require targeting
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			return true  # Select which enemy to damage
+		CardDatabase.EffectType.ENEMY_SWAP:
+			return true  # Select two enemies to swap
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			return true  # Select source enemy and target
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			return true  # Select which enemy to transfer wounds from
+		_:
+			return false
+
+func get_required_target_count(card_data: Dictionary) -> int:
+	"""Get number of targets required for this card"""
+	var effect_type = card_data.get("effect_type")
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			return 1  # One enemy
+		CardDatabase.EffectType.ENEMY_SWAP:
+			return 2  # Two enemies
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			return 2  # Source enemy and target enemy
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			return 1  # One enemy
+		_:
+			return 0
+
+func enter_targeting_mode(card_data: Dictionary, card_node: Node, source_deck: CardDeck):
+	"""Enter targeting mode for a card"""
+	print("\n🎯 ENTERING TARGETING MODE")
+	print("  Card: ", card_data.get("name", "Unknown"))
+
+	targeting_mode_active = true
+	targeting_card_data = card_data
+	targeting_card_node = card_node
+	targeting_source_deck = source_deck
+	selected_targets = []
+	required_target_count = get_required_target_count(card_data)
+
+	# Set card visual state
+	if card_node:
+		card_node.enter_targeting_mode()
+
+	# Disable all other cards
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card) and top_card != card_node:
+			top_card.disable_for_targeting()
+
+	# Highlight valid targets based on card effect
+	highlight_valid_targets_for_card(card_data)
+
+	# Enable entity targeting
+	enable_entity_targeting()
+
+	print("  Required targets: ", required_target_count)
+	print("  ✅ Targeting mode active")
+
+func cancel_targeting_mode():
+	"""Cancel targeting mode and restore normal state"""
+	print("\n❌ CANCELING TARGETING MODE")
+
+	if not targeting_mode_active:
+		return
+
+	targeting_mode_active = false
+	selected_targets = []
+
+	# Restore card visual states
+	for deck in [past_deck, present_deck, future_deck]:
+		var top_card = deck.get_top_card()
+		if top_card and is_instance_valid(top_card):
+			top_card.exit_targeting_mode()
+
+	# Clear highlights
+	clear_all_target_highlights()
+
+	# Disable entity targeting
+	disable_entity_targeting()
+
+	# Clear targeting variables
+	targeting_card_data = {}
+	targeting_card_node = null
+	targeting_source_deck = null
+	required_target_count = 0
+
+	print("  ✅ Targeting mode canceled")
+
+func on_target_selected(target):
+	"""Handle when a target is selected (entity or cell)"""
+	if not targeting_mode_active:
+		return
+
+	print("🎯 Target selected: ", target)
+
+	# Add to selected targets
+	selected_targets.append(target)
+
+	# Visual feedback for selected target
+	if target is Node2D:  # Entity
+		target.mark_as_targeted()
+
+	print("  Selected ", selected_targets.size(), "/", required_target_count, " targets")
+
+	# Check if we have all required targets
+	if selected_targets.size() >= required_target_count:
+		complete_targeting()
+
+func complete_targeting():
+	"""All targets selected - apply card effect and finish"""
+	print("\n✅ TARGETING COMPLETE")
+	print("  Applying effect with targets: ", selected_targets)
+
+	# Deduct time cost
+	var time_cost = targeting_card_data.get("time_cost", 0)
+	time_remaining -= time_cost
+	if time_remaining < 0:
+		time_remaining = 0
+	update_timer_display()
+
+	# Update all cards' affordability
+	update_all_cards_affordability()
+
+	# Apply card effect with targets
+	apply_card_effect_with_targets(targeting_card_data, selected_targets)
+
+	# Recycle the card
+	if targeting_source_deck:
+		recycle_card_simple(targeting_source_deck)
+
+	# Recalculate Future to show card effects
+	calculate_future_state()
+
+	# Update timeline visuals
+	var future_tp = get_timeline_panel("future")
+	create_timeline_entities(future_tp)
+	create_timeline_arrows(future_tp)
+	update_timeline_ui_visibility(future_tp)
+
+	var present_tp = get_timeline_panel("present")
+	create_timeline_entities(present_tp)
+	create_timeline_arrows(present_tp)
+	update_timeline_ui_visibility(present_tp)
+
+	# Update damage display in UI
+	update_damage_display()
+
+	# Exit targeting mode
+	cancel_targeting_mode()
+
+	print("  ✅ Card effect applied and targeting complete")
+
+func highlight_valid_targets_for_card(card_data: Dictionary):
+	"""Highlight valid targets based on card effect type"""
+	var effect_type = card_data.get("effect_type")
+	var present_tp = get_timeline_panel("present")
+	var future_tp = get_timeline_panel("future")
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			# Highlight all enemies in Present
+			for entity in present_tp.entities:
+				if not entity.is_player:
+					entity.show_as_valid_target()
+
+		CardDatabase.EffectType.ENEMY_SWAP:
+			# Highlight all enemies in Present
+			for entity in present_tp.entities:
+				if not entity.is_player:
+					entity.show_as_valid_target()
+
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			# Highlight all enemies in Present (Future will have same enemies)
+			for entity in present_tp.entities:
+				if not entity.is_player:
+					entity.show_as_valid_target()
+
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			# Highlight all enemies in Present
+			for entity in present_tp.entities:
+				if not entity.is_player:
+					entity.show_as_valid_target()
+
+func clear_all_target_highlights():
+	"""Clear all target highlights from all panels"""
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity):
+				entity.clear_target_visuals()
+		panel.clear_all_highlights()
+
+func enable_entity_targeting():
+	"""Enable clicking on entities for targeting"""
+	var present_tp = get_timeline_panel("present")
+	for entity in present_tp.entities:
+		if is_instance_valid(entity) and not entity.is_player:
+			entity.enable_targeting(self)
+
+func disable_entity_targeting():
+	"""Disable clicking on entities"""
+	for panel in timeline_panels:
+		for entity in panel.entities:
+			if is_instance_valid(entity):
+				entity.disable_targeting()
+
+func apply_card_effect_with_targets(card_data: Dictionary, targets: Array):
+	"""Apply card effect using selected targets"""
+	var present_tp = get_timeline_panel("present")
+	var effect_type = card_data.get("effect_type")
+	var effect_value = card_data.get("effect_value", 0)
+
+	match effect_type:
+		CardDatabase.EffectType.DAMAGE_ENEMY:
+			# Damage the selected enemy
+			if targets.size() > 0 and is_instance_valid(targets[0]):
+				var target_entity = targets[0]
+				# Find enemy in state
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == target_entity.entity_data["name"]:
+						present_tp.state["enemies"][i]["hp"] -= effect_value
+						print("Dealt ", effect_value, " damage to ", present_tp.state["enemies"][i]["name"])
+						if present_tp.state["enemies"][i]["hp"] <= 0:
+							present_tp.state["enemies"].remove_at(i)
+							print("  Enemy defeated!")
+						break
+
+		CardDatabase.EffectType.ENEMY_SWAP:
+			# Swap two enemies
+			if targets.size() >= 2 and is_instance_valid(targets[0]) and is_instance_valid(targets[1]):
+				var enemy1_name = targets[0].entity_data["name"]
+				var enemy2_name = targets[1].entity_data["name"]
+				var idx1 = -1
+				var idx2 = -1
+
+				# Find indices in state
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == enemy1_name:
+						idx1 = i
+					if present_tp.state["enemies"][i]["name"] == enemy2_name:
+						idx2 = i
+
+				# Swap
+				if idx1 >= 0 and idx2 >= 0:
+					var temp = present_tp.state["enemies"][idx1]
+					present_tp.state["enemies"][idx1] = present_tp.state["enemies"][idx2]
+					present_tp.state["enemies"][idx2] = temp
+					print("Swapped ", enemy1_name, " and ", enemy2_name)
+
+		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
+			# Set redirect flag
+			if targets.size() >= 2:
+				var source_enemy = targets[0]
+				var target_enemy = targets[1]
+				var source_idx = -1
+				var target_idx = -1
+
+				# Find indices
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == source_enemy.entity_data["name"]:
+						source_idx = i
+					if present_tp.state["enemies"][i]["name"] == target_enemy.entity_data["name"]:
+						target_idx = i
+
+				if source_idx >= 0 and target_idx >= 0:
+					future_redirect_flag = {
+						"from_enemy": source_idx,
+						"to_enemy": target_idx
+					}
+					print("Future: Enemy ", source_idx, " will attack Enemy ", target_idx)
+
+		CardDatabase.EffectType.WOUND_TRANSFER:
+			# Calculate and apply wound transfer
+			var past_tp = get_timeline_panel("past")
+			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
+				var target_entity = targets[0]
+				var target_name = target_entity.entity_data["name"]
+
+				# Find matching enemy in Past and Present
+				for i in range(present_tp.state["enemies"].size()):
+					if present_tp.state["enemies"][i]["name"] == target_name:
+						# Find in past
+						for past_enemy in past_tp.state.get("enemies", []):
+							if past_enemy["name"] == target_name:
+								var damage_taken = past_enemy["hp"] - present_tp.state["enemies"][i]["hp"]
+								if damage_taken > 0:
+									present_tp.state["enemies"][i]["hp"] -= damage_taken
+									print("Transferred ", damage_taken, " wound damage to ", target_name)
+									if present_tp.state["enemies"][i]["hp"] <= 0:
+										present_tp.state["enemies"].remove_at(i)
+								break
+						break
+
 func handle_game_over():
 	"""Handle player death - disable all inputs"""
 	game_over = true
-	
+
 	# Disable Play button
 	play_button.disabled = true
 	play_button.text = "GAME OVER"
-	
+
 	# Disable all cards permanently
 	disable_all_card_input()
 	for deck in [past_deck, present_deck, future_deck]:
 		var top_card = deck.get_top_card()
 		if top_card and is_instance_valid(top_card):
 			top_card.mark_as_used()  # Gray out all top cards
-	
+
 	print("💀 All controls disabled - Game Over!")
