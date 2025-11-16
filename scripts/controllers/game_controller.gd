@@ -115,12 +115,14 @@ func _initialize_systems() -> void:
 
 func _connect_events() -> void:
 	"""Connect to global event bus"""
+	Events.damage_dealt.connect(_on_damage_dealt)
 	Events.combat_ended.connect(_on_combat_ended)
 	Events.timer_updated.connect(_on_timer_updated)
 	Events.wave_changed.connect(_on_wave_changed)
 	Events.game_over.connect(_on_game_over)
 	Events.screen_shake_requested.connect(_apply_screen_shake)
 	Events.card_played.connect(_on_card_played)
+	print("  Events connected")
 
 # ============================================================================
 # CAROUSEL SETUP
@@ -671,6 +673,13 @@ func _update_timeline_ui_visibility(tp: Panel) -> void:
 func _on_combat_ended() -> void:
 	"""Handle combat end"""
 	print("  Combat phase ended")
+
+
+func _on_damage_dealt(target: Node2D, damage: int) -> void:
+	"""Handle damage event - update entity visuals"""
+	print("  GameController received damage_dealt event: ", damage, " to ", target)
+	if target and is_instance_valid(target):
+		target.update_display()  # Refresh HP label
 
 
 func _on_timer_updated(time_remaining: float) -> void:
