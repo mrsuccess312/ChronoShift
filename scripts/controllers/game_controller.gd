@@ -340,8 +340,14 @@ func _execute_complete_turn() -> void:
 	# Phase 5: Recalculate future
 	_recalculate_future_timelines()
 
-	# Phase 6: Update UI
+	# Phase 6: Update timeline displays (recreate entities/arrows)
+	_update_all_timeline_displays()
+
+	# Phase 7: Update UI labels
 	_update_all_displays()
+
+	# Phase 8: Show arrows after combat
+	_show_timeline_arrows()
 
 	print("\n✅ Turn complete\n")
 
@@ -390,6 +396,9 @@ func _carousel_slide_animation() -> void:
 		tween.tween_property(panel, "modulate", target["modulate"], 0.6).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 		panel.z_index = target["z_index"]
 
+		# Animate panel color to match new timeline type
+		_animate_panel_colors(tween, panel, panel.timeline_type)
+
 	await tween.finished
 
 	# Update panel interactivity
@@ -400,6 +409,42 @@ func _carousel_slide_animation() -> void:
 	_update_all_timeline_displays()
 
 	print("✅ Carousel slide complete")
+
+
+func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
+	"""Animate panel background color to match new timeline type"""
+	var stylebox = panel.get_theme_stylebox("panel")
+	if not stylebox is StyleBoxFlat:
+		return
+
+	if new_type == "past":
+		# Brown colors
+		var past_bg = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		var past_border = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		tween.tween_property(stylebox, "bg_color", past_bg, 0.6)
+		tween.tween_property(stylebox, "border_color", past_border, 0.6)
+
+	elif new_type == "present":
+		# Blue colors
+		var present_bg = Color(0.11764706, 0.22745098, 0.37254903, 1)
+		var present_border = Color(0.2901961, 0.61960787, 1, 1)
+		tween.tween_property(stylebox, "bg_color", present_bg, 0.6)
+		tween.tween_property(stylebox, "border_color", present_border, 0.6)
+
+	elif new_type == "future":
+		# Purple colors
+		var future_bg = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		var future_border = Color(0.7058824, 0.47843137, 1, 1)
+		tween.tween_property(stylebox, "bg_color", future_bg, 0.6)
+		tween.tween_property(stylebox, "border_color", future_border, 0.6)
+
+	elif new_type == "decorative":
+		# Decorative panels can be past or future colored
+		# For simplicity, use a neutral dark color
+		var dec_bg = Color(0.1, 0.1, 0.1, 1)
+		var dec_border = Color(0.3, 0.3, 0.3, 1)
+		tween.tween_property(stylebox, "bg_color", dec_bg, 0.6)
+		tween.tween_property(stylebox, "border_color", dec_border, 0.6)
 
 # ============================================================================
 # TIMELINE & STATE MANAGEMENT
@@ -551,6 +596,7 @@ func _create_player_attack_arrows(tp: Panel) -> void:
 		var arrow = ARROW_SCENE.instantiate()
 		arrow.z_index = 50
 		arrow.z_as_relative = true
+		arrow.visible = false  # Hide initially, show during combat
 		tp.add_child(arrow)
 		var curve = _calculate_smart_curve(player_entity.position, target_enemy.position)
 		arrow.setup(player_entity.position, target_enemy.position, curve)
@@ -561,6 +607,7 @@ func _create_player_attack_arrows(tp: Panel) -> void:
 		var twin_arrow = ARROW_SCENE.instantiate()
 		twin_arrow.z_index = 50
 		twin_arrow.z_as_relative = true
+		twin_arrow.visible = false  # Hide initially, show during combat
 		tp.add_child(twin_arrow)
 		var twin_curve = _calculate_smart_curve(twin_entity.position, target_enemy.position)
 		twin_arrow.setup(twin_entity.position, target_enemy.position, twin_curve)
@@ -606,6 +653,7 @@ func _create_enemy_attack_arrows(tp: Panel) -> void:
 		var arrow = ARROW_SCENE.instantiate()
 		arrow.z_index = 50
 		arrow.z_as_relative = true
+		arrow.visible = false  # Hide initially, show during combat
 		tp.add_child(arrow)
 		var curve = _calculate_smart_curve(enemy.position, target.position)
 		arrow.setup(enemy.position, target.position, curve)
@@ -626,6 +674,16 @@ func _delete_all_arrows() -> void:
 	"""Delete all arrows from all panels"""
 	for panel in timeline_panels:
 		panel.clear_arrows()
+
+
+func _show_timeline_arrows() -> void:
+	"""Show arrows on all timeline panels after combat"""
+	for panel in timeline_panels:
+		for arrow in panel.arrows:
+			if arrow and is_instance_valid(arrow):
+				arrow.visible = true
+				if arrow.has_method("show_arrow"):
+					arrow.show_arrow()
 
 
 func _update_all_timeline_displays() -> void:
@@ -737,15 +795,44 @@ func _update_damage_display() -> void:
 
 
 func _hide_ui_for_carousel() -> void:
+	"""Hide UI and block input during carousel animation"""
 	for panel in timeline_panels:
+		# Hide labels
 		if panel.has_node("PanelLabel"):
 			panel.get_node("PanelLabel").visible = false
 
+		# Block panel mouse input to prevent interaction during animation
+		panel.set_grid_interactive(false)
+
+	# Block card input during carousel
+	for deck in [card_manager.past_deck, card_manager.present_deck, card_manager.future_deck]:
+		if deck and deck.card_nodes:
+			for card_node in deck.card_nodes:
+				if card_node and is_instance_valid(card_node):
+					card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
 
 func _show_ui_after_carousel() -> void:
+	"""Show UI and restore input after carousel animation"""
 	for panel in timeline_panels:
+		# Show labels
 		if panel.has_node("PanelLabel"):
 			panel.get_node("PanelLabel").visible = true
+
+		# Mouse filters will be restored by _update_panel_mouse_filters()
+
+	# Restore card input (only top cards should be interactive)
+	for deck in [card_manager.past_deck, card_manager.present_deck, card_manager.future_deck]:
+		if deck and deck.card_nodes:
+			for i in range(deck.card_nodes.size()):
+				var card_node = deck.card_nodes[i]
+				if card_node and is_instance_valid(card_node):
+					# Only top card is interactive
+					var is_top_card = (i == deck.card_nodes.size() - 1)
+					if is_top_card:
+						card_node.mouse_filter = Control.MOUSE_FILTER_STOP
+					else:
+						card_node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 # ============================================================================
 # PROCESS & INPUT
