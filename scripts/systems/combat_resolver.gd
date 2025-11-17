@@ -154,24 +154,18 @@ func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: No
 		print("    💀 ", target.entity_name, " defeated!")
 		Events.entity_died.emit(target_node)
 
-		# Only remove entity if death was forecasted (prevents crash on unexpected deaths)
-		if target.is_death_forecasted:
-			print("      Removing entity (death was forecasted)")
-			target_node.visible = false
-			target_node.queue_free()
+		# Remove entity from PRESENT immediately
+		print("      Removing entity from PRESENT panel")
+		target_node.visible = false
+		target_node.queue_free()
 
-			# Remove from panel arrays immediately to prevent accessing freed node
-			var panel = present_panel
-			if panel.entity_nodes.has(target_node):
-				panel.entity_nodes.erase(target_node)
-			if panel.entities.has(target_node):
-				panel.entities.erase(target_node)
-			if panel.entity_data_list.has(target):
-				panel.entity_data_list.erase(target)
-		else:
-			# Death not forecasted - keep entity visible but mark as dead
-			print("      Entity defeated but death not forecasted (keeping visible)")
-			target_node.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Gray out
+		# Remove from panel arrays immediately to prevent accessing freed node
+		if present_panel.entity_nodes.has(target_node):
+			present_panel.entity_nodes.erase(target_node)
+		if present_panel.entities.has(target_node):
+			present_panel.entities.erase(target_node)
+		if present_panel.entity_data_list.has(target):
+			present_panel.entity_data_list.erase(target)
 
 	# Pause
 	await get_tree().create_timer(ATTACK_PAUSE_TIME).timeout
