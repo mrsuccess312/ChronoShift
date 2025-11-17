@@ -1,0 +1,155 @@
+[gd_scene load_steps=3 format=3 uid="uid://bfvnpq02hlkwn"]
+
+[ext_resource type="Script" uid="uid://cled8rl040jft" path="res://scripts/controllers/game_controller.gd" id="1_game_controller"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_sugp2"]
+bg_color = Color(0.15686275, 0.15686275, 0.19607843, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.78431374, 0.78431374, 0.8235294, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_game_controller")
+
+[node name="UIRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="CarouselContainer" type="Control" parent="UIRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PlayButton" type="Button" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1560.0
+offset_top = 960.0
+offset_right = 1890.0
+offset_bottom = 1050.0
+theme_override_colors/font_color = Color(0.875, 0.875, 0.875, 1)
+theme_override_font_sizes/font_size = 36
+text = "▶ PLAY"
+
+[node name="TimerLabel" type="Label" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1560.0
+offset_top = 900.0
+offset_right = 1890.0
+offset_bottom = 950.0
+theme_override_colors/font_color = Color(1, 0.8, 0.4, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_font_sizes/font_size = 28
+text = "1:00"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="WaveCounter" type="PanelContainer" parent="UIRoot"]
+layout_mode = 0
+offset_left = 1635.0
+offset_top = 30.0
+offset_right = 1896.0
+offset_bottom = 126.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_sugp2")
+
+[node name="WaveLabel" type="Label" parent="UIRoot/WaveCounter"]
+custom_minimum_size = Vector2(255, 90)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8627451, 0.9411765, 1, 1)
+theme_override_font_sizes/font_size = 30
+text = "Wave 1/10"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DamageDisplay" type="HBoxContainer" parent="UIRoot"]
+layout_mode = 0
+offset_left = 30.0
+offset_top = 960.0
+offset_right = 210.0
+offset_bottom = 1050.0
+theme_override_constants/separation = 10
+
+[node name="SwordIcon" type="ColorRect" parent="UIRoot/DamageDisplay"]
+custom_minimum_size = Vector2(60, 60)
+layout_mode = 2
+color = Color(1, 0.54901963, 0.23529412, 1)
+
+[node name="DamageLabel" type="Label" parent="UIRoot/DamageDisplay"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 42
+text = "15"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="DeckContainers" type="Control" parent="UIRoot"]
+anchors_preset = 0
+offset_right = 1920.0
+offset_bottom = 1080.0
+mouse_filter = 2
+
+[node name="PastDeckContainer" type="Control" parent="UIRoot/DeckContainers"]
+anchors_preset = 0
+offset_left = 500.0
+offset_top = 870.0
+offset_right = 750.0
+offset_bottom = 1050.0
+
+[node name="PastDeckLabel" type="Label" parent="UIRoot/DeckContainers/PastDeckContainer"]
+layout_mode = 0
+offset_right = 250.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+theme_override_font_sizes/font_size = 18
+text = "⟲ PAST DECK"
+horizontal_alignment = 1
+
+[node name="PresentDeckContainer" type="Control" parent="UIRoot/DeckContainers"]
+anchors_preset = 0
+offset_left = 835.0
+offset_top = 870.0
+offset_right = 1085.0
+offset_bottom = 1050.0
+
+[node name="PresentDeckLabel" type="Label" parent="UIRoot/DeckContainers/PresentDeckContainer"]
+layout_mode = 0
+offset_right = 250.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.2901961, 0.61960787, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "◉ PRESENT DECK"
+horizontal_alignment = 1
+
+[node name="FutureDeckContainer" type="Control" parent="UIRoot/DeckContainers"]
+anchors_preset = 0
+offset_left = 1170.0
+offset_top = 870.0
+offset_right = 1420.0
+offset_bottom = 1050.0
+
+[node name="FutureDeckLabel" type="Label" parent="UIRoot/DeckContainers/FutureDeckContainer"]
+layout_mode = 0
+offset_right = 250.0
+offset_bottom = 30.0
+theme_override_colors/font_color = Color(0.7058824, 0.47843137, 1, 1)
+theme_override_font_sizes/font_size = 18
+text = "⟳ FUTURE DECK"
+horizontal_alignment = 1
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(960, 540)
