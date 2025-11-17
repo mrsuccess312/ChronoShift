@@ -317,18 +317,10 @@ func _initialize_game() -> void:
 	present_panel.add_entity(player, 1, 0)  # Row 1, Column 0
 
 	# Create enemy entities
-	var enemy_a = EntityData.create_enemy()
-	enemy_a.entity_name = "Chrono-Beast A"
-	enemy_a.hp = 45
-	enemy_a.max_hp = 45
-	enemy_a.damage = 12
+	var enemy_a = EntityData.create_enemy("Chrono-Beast A", 45, 12)
 	present_panel.add_entity(enemy_a, 0, 2)  # Row 0, Column 2
 
-	var enemy_b = EntityData.create_enemy()
-	enemy_b.entity_name = "Chrono-Beast B"
-	enemy_b.hp = 30
-	enemy_b.max_hp = 30
-	enemy_b.damage = 8
+	var enemy_b = EntityData.create_enemy("Chrono-Beast B", 30, 8)
 	present_panel.add_entity(enemy_b, 1, 2)  # Row 1, Column 2
 
 	# Calculate combat targets using TargetCalculator
