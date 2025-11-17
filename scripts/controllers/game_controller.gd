@@ -383,6 +383,12 @@ func _execute_complete_turn() -> void:
 	# Phase 1: Carousel slide
 	await _carousel_slide_animation()
 
+	# Phase 1.5: Recreate entity visuals for new Present and Past
+	print("📋 Recreating entities after carousel...")
+	_create_timeline_entities(timeline_panels[1])  # Past
+	_create_timeline_entities(timeline_panels[2])  # Present
+	print("  ✅ Entities recreated")
+
 	# Phase 2: Post-carousel - show labels on new Present
 	_show_labels_after_carousel()
 
