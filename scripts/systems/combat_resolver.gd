@@ -182,7 +182,8 @@ func _find_entity_by_id(present_panel: Panel, unique_id: String) -> EntityData:
 func _find_entity_node(present_panel: Panel, unique_id: String) -> Node2D:
 	"""Find visual entity node by unique_id"""
 	for node in present_panel.entity_nodes:
-		if node.entity_data.get("unique_id") == unique_id:
+		# Check if node is valid before accessing properties (prevents crash when entity dies)
+		if node and is_instance_valid(node) and node.entity_data.get("unique_id") == unique_id:
 			return node
 	return null
 

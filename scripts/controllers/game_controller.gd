@@ -396,6 +396,9 @@ func _execute_complete_turn() -> void:
 	var present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel)
 
+	# Update backwards-compatible state after combat (so carousel captures correct HP)
+	present_panel.state = present_panel.get_state_dict()
+
 	# Phase 3.5: Apply REAL_FUTURE if it was set by a card effect
 	if GameState.should_apply_real_future():
 		print("  🔄 Applying REAL_FUTURE timeline...")
