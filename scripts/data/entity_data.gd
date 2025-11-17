@@ -28,6 +28,7 @@ var grid_col: int = -1  # Grid position (col)
 # ===== SPECIAL FLAGS =====
 var is_twin: bool = false  # Special case: Past Twin entity
 var is_conscripted: bool = false  # Special case: Conscripted enemy
+var is_death_forecasted: bool = false  # If true, entity will die in Future timeline (remove when killed)
 
 
 # ===== HELPER CONSTRUCTORS =====
@@ -90,6 +91,7 @@ func duplicate_entity() -> EntityData:
 	copy.grid_col = grid_col
 	copy.is_twin = is_twin
 	copy.is_conscripted = is_conscripted
+	copy.is_death_forecasted = is_death_forecasted
 	return copy
 
 

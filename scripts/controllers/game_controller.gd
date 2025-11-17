@@ -688,7 +688,9 @@ func _simulate_combat(panel: Panel) -> void:
 
 		var target = _find_entity_data_by_id(panel, attacker.attack_target_id)
 		if target and target.is_alive():
-			target.take_damage(attacker.damage)
+			var died = target.take_damage(attacker.damage)
+			if died:
+				target.is_death_forecasted = true  # Mark for removal during real combat
 			print("    [SIM] ", attacker.entity_name, " → ", target.entity_name, " (", target.hp, "/", target.max_hp, " HP)")
 
 	# Phase 2: Enemy team attacks
@@ -700,7 +702,9 @@ func _simulate_combat(panel: Panel) -> void:
 
 		var target = _find_entity_data_by_id(panel, attacker.attack_target_id)
 		if target and target.is_alive():
-			target.take_damage(attacker.damage)
+			var died = target.take_damage(attacker.damage)
+			if died:
+				target.is_death_forecasted = true  # Mark for removal during real combat
 			print("    [SIM] ", attacker.entity_name, " → ", target.entity_name, " (", target.hp, "/", target.max_hp, " HP)")
 
 

@@ -105,7 +105,7 @@ func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) 
 			continue
 
 		# Execute attack animation
-		await _animate_attack(attacker, target, attacker_node, target_node)
+		await _animate_attack(attacker, target, attacker_node, target_node, present_panel)
 		await get_tree().create_timer(0.1).timeout
 
 
@@ -114,7 +114,7 @@ func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) 
 # ============================================================================
 
 ## Animate single attack with damage application
-func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: Node2D, target_node: Node2D) -> void:
+func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: Node2D, target_node: Node2D, present_panel: Panel) -> void:
 	"""Animate single attack with damage application"""
 	var original_pos = attacker_node.position
 	var target_pos = target_node.position
@@ -153,8 +153,25 @@ func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: No
 	if target_died:
 		print("    💀 ", target.entity_name, " defeated!")
 		Events.entity_died.emit(target_node)
-		target_node.visible = false
-		target_node.queue_free()
+
+		# Only remove entity if death was forecasted (prevents crash on unexpected deaths)
+		if target.is_death_forecasted:
+			print("      Removing entity (death was forecasted)")
+			target_node.visible = false
+			target_node.queue_free()
+
+			# Remove from panel arrays immediately to prevent accessing freed node
+			var panel = present_panel
+			if panel.entity_nodes.has(target_node):
+				panel.entity_nodes.erase(target_node)
+			if panel.entities.has(target_node):
+				panel.entities.erase(target_node)
+			if panel.entity_data_list.has(target):
+				panel.entity_data_list.erase(target)
+		else:
+			# Death not forecasted - keep entity visible but mark as dead
+			print("      Entity defeated but death not forecasted (keeping visible)")
+			target_node.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Gray out
 
 	# Pause
 	await get_tree().create_timer(ATTACK_PAUSE_TIME).timeout
