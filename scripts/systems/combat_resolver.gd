@@ -97,16 +97,11 @@ func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) 
 			continue
 
 		# Find visual nodes for animation
-		print("    DEBUG: Looking for attacker ID: ", attacker.unique_id)
-		print("    DEBUG: Looking for target ID: ", target.unique_id)
-		print("    DEBUG: Panel has ", present_panel.entity_nodes.size(), " visual nodes")
 		var attacker_node = _find_entity_node(present_panel, attacker.unique_id)
 		var target_node = _find_entity_node(present_panel, target.unique_id)
 
 		if not attacker_node or not target_node:
 			print("    Warning: Could not find visual nodes for combat")
-			print("      Attacker node found: ", attacker_node != null)
-			print("      Target node found: ", target_node != null)
 			continue
 
 		# Execute attack animation
@@ -187,7 +182,7 @@ func _find_entity_by_id(present_panel: Panel, unique_id: String) -> EntityData:
 func _find_entity_node(present_panel: Panel, unique_id: String) -> Node2D:
 	"""Find visual entity node by unique_id"""
 	for node in present_panel.entity_nodes:
-		if node.has_method("get") and node.entity_data.get("unique_id") == unique_id:
+		if node.entity_data.get("unique_id") == unique_id:
 			return node
 	return null
 
