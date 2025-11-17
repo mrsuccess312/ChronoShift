@@ -5,6 +5,7 @@ extends Panel
 # Refactored to use EntityData models instead of Dictionary states
 
 const GRID_CELL_SCENE = preload("res://scenes/grid_cell.tscn")
+const ARROW_SCENE = preload("res://scenes/arrow.tscn")
 
 var timeline_type: String = "decorative"  # "past", "present", "future", "decorative"
 
@@ -335,6 +336,104 @@ func clear_all():
 	clear_all_entities()  # Clear data models
 	clear_entities()  # Clear visual nodes
 	clear_arrows()
+
+# ===== ARROW CREATION (SIMPLIFIED) =====
+
+func create_timeline_arrows():
+	"""Create arrows based on entity attack_target_id properties"""
+	print("🏹 Creating arrows for ", timeline_type, " timeline...")
+
+	# Clear old arrows
+	clear_arrows()
+
+	if entity_data_list.is_empty():
+		print("  No entities - no arrows")
+		return
+
+	# Determine which team's arrows to show
+	var show_player_arrows = (timeline_type == "present")
+	var show_enemy_arrows = (timeline_type == "future")
+
+	if timeline_type == "past" or timeline_type == "decorative":
+		print("  ", timeline_type, " - no arrows")
+		return
+
+	# Create arrow for each entity with a target
+	for attacker in entity_data_list:
+		# Skip if no target
+		if attacker.attack_target_id == "":
+			continue
+
+		# Skip if will miss
+		if attacker.will_miss:
+			continue
+
+		# Filter by team based on timeline type
+		if show_player_arrows and attacker.is_enemy:
+			continue  # PRESENT: only player arrows
+		if show_enemy_arrows and not attacker.is_enemy:
+			continue  # FUTURE: only enemy arrows
+
+		# Find target entity
+		var target = _find_entity_data_by_id(attacker.attack_target_id)
+		if not target:
+			print("  Warning: Entity '", attacker.entity_name, "' has invalid target ID: ", attacker.attack_target_id)
+			continue
+
+		# Find visual nodes
+		var attacker_node = _find_entity_node_by_id(attacker.unique_id)
+		var target_node = _find_entity_node_by_id(target.unique_id)
+
+		if not attacker_node or not target_node:
+			print("  Warning: Could not find visual nodes for arrow")
+			continue
+
+		# Create arrow
+		var arrow = ARROW_SCENE.instantiate()
+		arrow.z_index = 50
+		arrow.z_as_relative = true
+		add_child(arrow)
+
+		var curve = _calculate_smart_curve(attacker_node.position, target_node.position)
+		arrow.setup(attacker_node.position, target_node.position, curve, attacker.unique_id, target.unique_id)
+
+		arrows.append(arrow)
+
+		var team = "PLAYER" if not attacker.is_enemy else "ENEMY"
+		print("  [", team, "] ", attacker.entity_name, " → ", target.entity_name)
+
+	print("  Created ", arrows.size(), " arrows")
+
+func _find_entity_data_by_id(unique_id: String) -> EntityData:
+	"""Find EntityData by unique_id"""
+	for entity in entity_data_list:
+		if entity.unique_id == unique_id:
+			return entity
+	return null
+
+func _find_entity_node_by_id(unique_id: String) -> Node2D:
+	"""Find visual entity node by unique_id"""
+	for node in entity_nodes:
+		if not node or not is_instance_valid(node):
+			continue
+
+		# Check if node has entity_data with matching unique_id
+		if node.has("entity_data"):
+			var entity_dict = node.get("entity_data")
+			if entity_dict.get("unique_id") == unique_id:
+				return node
+
+	return null
+
+func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
+	"""Calculate arrow curve based on spatial relationship"""
+	var direction = to - from
+	var horizontal_distance = abs(direction.x)
+	var base_curve = 30.0
+	var horizontal_factor = horizontal_distance / max(direction.length(), 1.0)
+	var curve_strength = base_curve * (0.5 + horizontal_factor * 0.5)
+
+	return -curve_strength if direction.x < 0 else curve_strength
 
 # ===== BACKWARDS COMPATIBILITY HELPERS (TEMPORARY) =====
 
