@@ -149,97 +149,137 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 	match effect_type:
 		# ===== PRESENT EFFECTS =====
 		CardDatabase.EffectType.HEAL_PLAYER:
-			var current_hp = present_tp.state["player"]["hp"]
-			var max_hp = present_tp.state["player"]["max_hp"]
-			present_tp.state["player"]["hp"] = min(current_hp + effect_value, max_hp)
-			print("Healed ", effect_value, " HP")
-			Events.hp_updated.emit(null, present_tp.state["player"]["hp"])
+			var player_entity = _get_player_entity_data(present_tp)
+			if player_entity:
+				player_entity.heal(effect_value)
+				print("Healed ", effect_value, " HP")
+				Events.hp_updated.emit(null, player_entity.hp)
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.DAMAGE_ENEMY:
-			if present_tp.state["enemies"].size() > 0:
-				present_tp.state["enemies"][0]["hp"] -= effect_value
-				if present_tp.state["enemies"][0]["hp"] <= 0:
-					present_tp.state["enemies"].remove_at(0)
-				print("Dealt ", effect_value, " damage")
+			var enemies = _get_enemy_entities_data(present_tp)
+			if enemies.size() > 0:
+				var target = enemies[0]
+				var died = target.take_damage(effect_value)
+				print("Dealt ", effect_value, " damage to ", target.entity_name)
+				if died:
+					present_tp.entity_data_list.erase(target)
+					print("  Enemy defeated!")
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.DAMAGE_ALL_ENEMIES:
+			var enemies = _get_enemy_entities_data(present_tp)
 			var defeated = []
-			for enemy in present_tp.state["enemies"]:
-				enemy["hp"] -= effect_value
-				if enemy["hp"] <= 0:
+			for enemy in enemies:
+				var died = enemy.take_damage(effect_value)
+				if died:
 					defeated.append(enemy)
 			for enemy in defeated:
-				present_tp.state["enemies"].erase(enemy)
-			print("Dealt ", effect_value, " damage to all")
+				present_tp.entity_data_list.erase(enemy)
+			print("Dealt ", effect_value, " damage to all enemies")
+			# Sync to backwards-compatible state
+			present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.BOOST_DAMAGE:
-			# Store original damage before boost
-			GameState.original_damage_before_boost = present_tp.state["player"]["damage"]
-			present_tp.state["player"]["damage"] += effect_value
-			GameState.damage_boost_active = true  # Mark for reset next turn
-			print("Boosted damage by ", effect_value, " (will reset next turn from ", GameState.original_damage_before_boost, " to ", present_tp.state["player"]["damage"], ")")
-			Events.damage_display_updated.emit(present_tp.state["player"]["damage"])
+			var player_entity = _get_player_entity_data(present_tp)
+			if player_entity:
+				# Store original damage before boost
+				GameState.original_damage_before_boost = player_entity.damage
+				player_entity.damage += effect_value
+				GameState.damage_boost_active = true  # Mark for reset next turn
+				print("Boosted damage by ", effect_value, " (will reset next turn from ", GameState.original_damage_before_boost, " to ", player_entity.damage, ")")
+				Events.damage_display_updated.emit(player_entity.damage)
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.ENEMY_SWAP:
-			if present_tp.state["enemies"].size() >= 2:
-				# Swap first two enemies
-				var temp = present_tp.state["enemies"][0]
-				present_tp.state["enemies"][0] = present_tp.state["enemies"][1]
-				present_tp.state["enemies"][1] = temp
+			var enemies = _get_enemy_entities_data(present_tp)
+			if enemies.size() >= 2:
+				# Swap grid positions of first two enemies
+				var temp_row = enemies[0].grid_row
+				var temp_col = enemies[0].grid_col
+				enemies[0].grid_row = enemies[1].grid_row
+				enemies[0].grid_col = enemies[1].grid_col
+				enemies[1].grid_row = temp_row
+				enemies[1].grid_col = temp_col
 				print("Swapped enemy positions")
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		# ===== PAST EFFECTS =====
 		CardDatabase.EffectType.HP_SWAP_FROM_PAST:
-			if past_tp and not past_tp.state.is_empty():
-				var past_hp = past_tp.state["player"]["hp"]
-				present_tp.state["player"]["hp"] = past_hp
-				print("HP swapped from Past: now at ", past_hp, " HP")
-				Events.hp_updated.emit(null, past_hp)
+			if past_tp and past_tp.entity_data_list.size() > 0:
+				var past_player = _get_player_entity_data(past_tp)
+				var present_player = _get_player_entity_data(present_tp)
+				if past_player and present_player:
+					present_player.hp = past_player.hp
+					print("HP swapped from Past: now at ", present_player.hp, " HP")
+					Events.hp_updated.emit(null, present_player.hp)
+					# Sync to backwards-compatible state
+					present_tp.state = present_tp.get_state_dict()
 			else:
 				print("No Past state available - card has no effect")
 
 		CardDatabase.EffectType.SUMMON_PAST_TWIN:
-			if past_tp and not past_tp.state.is_empty():
-				print("\n🔄 Summoning Past Twin")
+			if past_tp and past_tp.entity_data_list.size() > 0:
+				var past_player = _get_player_entity_data(past_tp)
+				if past_player:
+					print("\n🔄 Summoning Past Twin")
 
-				# Create twin entity data based on PAST player stats
-				var twin_data = {
-					"name": "Past Twin",
-					"hp": int(past_tp.state["player"]["hp"] * 0.5),
-					"max_hp": int(past_tp.state["player"]["max_hp"] * 0.5),
-					"damage": int(past_tp.state["player"]["damage"] * 0.5),
-					"is_twin": true
-				}
+					# Create twin using EntityData
+					var twin = EntityData.create_twin(past_player)
+					# Position twin next to player (grid position)
+					var present_player = _get_player_entity_data(present_tp)
+					if present_player:
+						twin.grid_row = present_player.grid_row + 1  # Place below player
+						twin.grid_col = present_player.grid_col
 
-				print("  Twin stats: HP=", twin_data["hp"], " DMG=", twin_data["damage"])
-				present_tp.state["twin"] = twin_data
-				print("  ✅ Past Twin summoned to fight alongside you!")
+					# Add twin to Present panel
+					present_tp.entity_data_list.append(twin)
+					print("  Twin stats: HP=", twin.hp, " DMG=", twin.damage)
+					print("  ✅ Past Twin summoned to fight alongside you!")
+					# Sync to backwards-compatible state
+					present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
-			if past_tp and not past_tp.state.is_empty() and past_tp.state["enemies"].size() > 0:
-				var conscripted = past_tp.state["enemies"][0].duplicate()
-				conscripted["name"] = "Conscripted " + conscripted["name"]
-				print("Conscripted ", conscripted["name"], " to fight for you")
-				if present_tp.state["enemies"].size() > 0:
-					present_tp.state["enemies"][0]["hp"] -= conscripted["damage"]
-					if present_tp.state["enemies"][0]["hp"] <= 0:
-						present_tp.state["enemies"].remove_at(0)
+			var past_enemies = _get_enemy_entities_data(past_tp) if past_tp else []
+			if past_enemies.size() > 0:
+				var conscripted = past_enemies[0].duplicate_entity()
+				conscripted.entity_name = "Conscripted " + conscripted.entity_name
+				conscripted.is_enemy = false  # Now fights for player
+				conscripted.is_conscripted = true
+				print("Conscripted ", conscripted.entity_name, " to fight for you")
+
+				var present_enemies = _get_enemy_entities_data(present_tp)
+				if present_enemies.size() > 0:
+					var died = present_enemies[0].take_damage(conscripted.damage)
+					if died:
+						present_tp.entity_data_list.erase(present_enemies[0])
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
-			if past_tp and not past_tp.state.is_empty():
-				if present_tp.state["enemies"].size() > 0 and past_tp.state["enemies"].size() > 0:
-					var present_enemy = present_tp.state["enemies"][0]
-					var past_enemy = past_tp.state["enemies"][0]
-					var damage_taken = past_enemy["hp"] - present_enemy["hp"]
-					if damage_taken > 0:
-						present_enemy["hp"] -= damage_taken
-						print("Transferred ", damage_taken, " wound damage")
-						if present_enemy["hp"] <= 0:
-							present_tp.state["enemies"].remove_at(0)
+			var past_enemies = _get_enemy_entities_data(past_tp) if past_tp else []
+			var present_enemies = _get_enemy_entities_data(present_tp)
+			if past_enemies.size() > 0 and present_enemies.size() > 0:
+				var past_enemy = past_enemies[0]
+				var present_enemy = present_enemies[0]
+				# Calculate damage taken between Past and Present
+				var damage_taken = past_enemy.max_hp - past_enemy.hp - (present_enemy.max_hp - present_enemy.hp)
+				if damage_taken > 0:
+					var died = present_enemy.take_damage(damage_taken)
+					print("Transferred ", damage_taken, " wound damage")
+					if died:
+						present_tp.entity_data_list.erase(present_enemy)
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 
 		# ===== FUTURE EFFECTS =====
 		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
-			if present_tp.state["enemies"].size() >= 2:
+			var enemies = _get_enemy_entities_data(present_tp)
+			if enemies.size() >= 2:
 				GameState.future_redirect_flag = {
 					"from_enemy": 0,
 					"to_enemy": 1
@@ -247,7 +287,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				print("Future: Enemy 0 will attack Enemy 1")
 
 		CardDatabase.EffectType.CHAOS_INJECTION:
-			var enemy_count = present_tp.state["enemies"].size()
+			var enemies = _get_enemy_entities_data(present_tp)
+			var enemy_count = enemies.size()
 			if enemy_count > 0:
 				var num_to_miss = min(effect_value, enemy_count)
 				var indices = range(enemy_count)
@@ -259,15 +300,20 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				print("Chaos Injection: ", num_to_miss, " enemies will miss")
 
 		CardDatabase.EffectType.FUTURE_SELF_AID:
-			if present_tp.state["player"]["hp"] <= 25:
-				present_tp.state["player"]["hp"] += effect_value
-				print("Borrowed ", effect_value, " HP from Future")
-				Events.hp_updated.emit(null, present_tp.state["player"]["hp"])
-			else:
-				print("Cannot use Future Self Aid - HP too high (must be ≤ 25)")
+			var player_entity = _get_player_entity_data(present_tp)
+			if player_entity:
+				if player_entity.hp <= 25:
+					player_entity.heal(effect_value)
+					print("Borrowed ", effect_value, " HP from Future")
+					Events.hp_updated.emit(null, player_entity.hp)
+					# Sync to backwards-compatible state
+					present_tp.state = present_tp.get_state_dict()
+				else:
+					print("Cannot use Future Self Aid - HP too high (must be ≤ 25)")
 
 		CardDatabase.EffectType.TIMELINE_SCRAMBLE:
-			var enemy_count = present_tp.state["enemies"].size()
+			var enemies = _get_enemy_entities_data(present_tp)
+			var enemy_count = enemies.size()
 			if enemy_count > 0:
 				for i in range(enemy_count):
 					if randf() < effect_value:
@@ -285,41 +331,48 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 	match effect_type:
 		CardDatabase.EffectType.DAMAGE_ENEMY:
 			if targets.size() > 0 and is_instance_valid(targets[0]):
-				var target_entity = targets[0]
-				for i in range(present_tp.state["enemies"].size()):
-					if present_tp.state["enemies"][i]["name"] == target_entity.entity_data["name"]:
-						present_tp.state["enemies"][i]["hp"] -= effect_value
-						print("Dealt ", effect_value, " damage to ", present_tp.state["enemies"][i]["name"])
-						Events.damage_dealt.emit(target_entity, effect_value)
-						if present_tp.state["enemies"][i]["hp"] <= 0:
-							present_tp.state["enemies"].remove_at(i)
+				var target_visual = targets[0]
+				var target_unique_id = target_visual.entity_data.get("unique_id", "")
+
+				# Find EntityData by unique_id
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == target_unique_id:
+						var died = entity.take_damage(effect_value)
+						print("Dealt ", effect_value, " damage to ", entity.entity_name)
+						Events.damage_dealt.emit(target_visual, effect_value)
+						if died:
+							present_tp.entity_data_list.erase(entity)
 							print("  Enemy defeated!")
+						# Sync to backwards-compatible state
+						present_tp.state = present_tp.get_state_dict()
 						break
 
 		CardDatabase.EffectType.ENEMY_SWAP:
 			if targets.size() >= 2 and is_instance_valid(targets[0]) and is_instance_valid(targets[1]):
-				var enemy1_name = targets[0].entity_data["name"]
-				var enemy2_name = targets[1].entity_data["name"]
-				var idx1 = -1
-				var idx2 = -1
+				var enemy1_id = targets[0].entity_data.get("unique_id", "")
+				var enemy2_id = targets[1].entity_data.get("unique_id", "")
+				var entity1 = null
+				var entity2 = null
 
-				for i in range(present_tp.state["enemies"].size()):
-					if present_tp.state["enemies"][i]["name"] == enemy1_name:
-						idx1 = i
-					if present_tp.state["enemies"][i]["name"] == enemy2_name:
-						idx2 = i
+				# Find EntityData objects by unique_id
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == enemy1_id:
+						entity1 = entity
+					elif entity.unique_id == enemy2_id:
+						entity2 = entity
 
-				if idx1 >= 0 and idx2 >= 0:
-					var temp = present_tp.state["enemies"][idx1]
-					present_tp.state["enemies"][idx1] = present_tp.state["enemies"][idx2]
-					present_tp.state["enemies"][idx2] = temp
-					print("Swapped ", enemy1_name, " and ", enemy2_name)
+				if entity1 and entity2:
+					# Swap grid positions
+					var temp_row = entity1.grid_row
+					var temp_col = entity1.grid_col
+					entity1.grid_row = entity2.grid_row
+					entity1.grid_col = entity2.grid_col
+					entity2.grid_row = temp_row
+					entity2.grid_col = temp_col
+					print("Swapped ", entity1.entity_name, " and ", entity2.entity_name)
 
-					# Update entity visuals
-					targets[0].entity_data = present_tp.state["enemies"][idx1]
-					targets[0].update_display()
-					targets[1].entity_data = present_tp.state["enemies"][idx2]
-					targets[1].update_display()
+					# Sync to backwards-compatible state
+					present_tp.state = present_tp.get_state_dict()
 
 					# Request future recalculation to reflect new positions
 					Events.future_recalculation_requested.emit()
@@ -327,20 +380,21 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
 			if targets.size() >= 2:
 				var future_tp = _get_timeline_panel("future")
-				if not future_tp or future_tp.state.is_empty():
+				if not future_tp or future_tp.entity_data_list.size() == 0:
 					print("No future state - redirect attack failed")
 					return
 
-				var source_enemy = targets[0]
-				var target_enemy = targets[1]
+				var source_enemy_id = targets[0].entity_data.get("unique_id", "")
+				var target_enemy_id = targets[1].entity_data.get("unique_id", "")
 				var source_idx = -1
 				var target_idx = -1
 
-				# Find indices in FUTURE timeline (not present)
-				for i in range(future_tp.state["enemies"].size()):
-					if future_tp.state["enemies"][i]["name"] == source_enemy.entity_data["name"]:
+				# Find indices in FUTURE timeline by unique_id
+				var future_enemies = _get_enemy_entities_data(future_tp)
+				for i in range(future_enemies.size()):
+					if future_enemies[i].unique_id == source_enemy_id:
 						source_idx = i
-					if future_tp.state["enemies"][i]["name"] == target_enemy.entity_data["name"]:
+					if future_enemies[i].unique_id == target_enemy_id:
 						target_idx = i
 
 				if source_idx >= 0 and target_idx >= 0:
@@ -351,73 +405,72 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					print("Future: Enemy ", source_idx, " will attack Enemy ", target_idx)
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
-			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
-				var past_target_entity = targets[0]  # This is the Past entity
-				var target_name = past_target_entity.entity_data["name"]
+			if targets.size() > 0 and past_tp and past_tp.entity_data_list.size() > 0:
+				var past_target_visual = targets[0]  # This is the Past entity visual
+				var target_unique_id = past_target_visual.entity_data.get("unique_id", "")
 
-				# Find the corresponding Present enemy
-				for i in range(present_tp.state["enemies"].size()):
-					if present_tp.state["enemies"][i]["name"] == target_name:
-						for past_enemy in past_tp.state.get("enemies", []):
-							if past_enemy["name"] == target_name:
-								var damage_taken = past_enemy["hp"] - present_tp.state["enemies"][i]["hp"]
-								if damage_taken > 0:
-									present_tp.state["enemies"][i]["hp"] -= damage_taken
-									print("Transferred ", damage_taken, " wound damage to ", target_name)
+				# Find EntityData in Past and Present by unique_id
+				var past_entity = null
+				var present_entity = null
 
-									# Find and update the PRESENT entity visual (not the Past one)
-									var present_enemy_entity = _find_entity_by_name(present_tp, target_name)
-									if present_enemy_entity:
-										present_enemy_entity.entity_data = present_tp.state["enemies"][i]
-										present_enemy_entity.update_display()
-										print("  ✅ Updated Present enemy HP label")
-
-										# Emit damage event for visual feedback
-										Events.damage_dealt.emit(present_enemy_entity, damage_taken)
-
-									if present_tp.state["enemies"][i]["hp"] <= 0:
-										present_tp.state["enemies"].remove_at(i)
-								break
+				for entity in past_tp.entity_data_list:
+					if entity.unique_id == target_unique_id and entity.is_enemy:
+						past_entity = entity
 						break
+
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == target_unique_id and entity.is_enemy:
+						present_entity = entity
+						break
+
+				if past_entity and present_entity:
+					# Calculate damage taken between Past and Present
+					var damage_taken = (past_entity.max_hp - past_entity.hp) - (present_entity.max_hp - present_entity.hp)
+					if damage_taken > 0:
+						var died = present_entity.take_damage(damage_taken)
+						print("Transferred ", damage_taken, " wound damage to ", present_entity.entity_name)
+
+						# Emit damage event for visual feedback
+						var present_visual = _find_entity_by_unique_id_visual(present_tp, target_unique_id)
+						if present_visual:
+							Events.damage_dealt.emit(present_visual, damage_taken)
+
+						if died:
+							present_tp.entity_data_list.erase(present_entity)
+						# Sync to backwards-compatible state
+						present_tp.state = present_tp.get_state_dict()
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
-			if targets.size() > 0 and past_tp and not past_tp.state.is_empty():
-				var target_entity = targets[0]
-				var conscripted_data = target_entity.entity_data.duplicate(true)
+			if targets.size() > 0 and past_tp and past_tp.entity_data_list.size() > 0:
+				var target_visual = targets[0]
+				var target_unique_id = target_visual.entity_data.get("unique_id", "")
 
-				print("🔄 Conscripting ", conscripted_data["name"], " to fight in player's place")
-
-				# Store original player data for restoration after combat
-				GameState.original_player_data = present_tp.state["player"].duplicate(true)
-				GameState.conscripted_enemy_data = conscripted_data.duplicate(true)
-				GameState.conscription_active = true
-
-				print("  Stored original player: HP=", GameState.original_player_data["hp"], " DMG=", GameState.original_player_data["damage"])
-
-				# Swap in Present: Replace player with conscripted enemy
-				present_tp.state["player"] = conscripted_data
-				present_tp.state["player"].erase("is_enemy")  # It's now the player
-
-				# Swap in Past: Replace the enemy with player at that position
-				for i in range(past_tp.state["enemies"].size()):
-					if past_tp.state["enemies"][i]["name"] == conscripted_data["name"]:
-						past_tp.state["enemies"][i] = GameState.original_player_data.duplicate(true)
-						past_tp.state["enemies"][i]["name"] = "You (Past)"
-
-						# Update visual for swapped enemy in Past
-						var past_entity = _find_entity_by_name(past_tp, conscripted_data["name"])
-						if past_entity:
-							past_entity.entity_data = past_tp.state["enemies"][i]
-							past_entity.update_display()
+				# Find the conscripted enemy in Past
+				var conscripted_entity = null
+				for entity in past_tp.entity_data_list:
+					if entity.unique_id == target_unique_id and entity.is_enemy:
+						conscripted_entity = entity
 						break
 
-				# Update visual for player in Present
-				var player_entity = _find_player_entity(present_tp)
-				if player_entity:
-					player_entity.entity_data = present_tp.state["player"]
-					player_entity.update_display()
+				if conscripted_entity:
+					print("🔄 Conscripting ", conscripted_entity.entity_name, " to attack in Present")
 
-				print("  ✅ Swap complete: Enemy now fights as player, player appears in Past")
+					# Create a copy of the conscripted enemy for Present
+					var conscripted_copy = conscripted_entity.duplicate_entity()
+					conscripted_copy.is_enemy = false  # Now fights for player
+					conscripted_copy.is_conscripted = true
+
+					# Attack first enemy in Present
+					var present_enemies = _get_enemy_entities_data(present_tp)
+					if present_enemies.size() > 0:
+						var died = present_enemies[0].take_damage(conscripted_copy.damage)
+						print("  Conscripted enemy deals ", conscripted_copy.damage, " damage")
+						if died:
+							present_tp.entity_data_list.erase(present_enemies[0])
+							print("  Enemy defeated!")
+					# Sync to backwards-compatible state
+					present_tp.state = present_tp.get_state_dict()
+					print("  ✅ Conscription complete")
 
 
 ## Recycle used card back to deck
@@ -612,5 +665,39 @@ func _find_player_entity(panel):
 
 	for entity in panel.entities:
 		if entity.is_player and not entity.entity_data.get("is_twin", false):
+			return entity
+	return null
+
+
+## Get player EntityData from a panel
+func _get_player_entity_data(panel) -> EntityData:
+	if not panel or not is_instance_valid(panel):
+		return null
+
+	for entity in panel.entity_data_list:
+		if not entity.is_enemy and not entity.is_twin:
+			return entity
+	return null
+
+
+## Get all enemy EntityData from a panel
+func _get_enemy_entities_data(panel) -> Array:
+	var enemies = []
+	if not panel or not is_instance_valid(panel):
+		return enemies
+
+	for entity in panel.entity_data_list:
+		if entity.is_enemy:
+			enemies.append(entity)
+	return enemies
+
+
+## Find visual entity node by unique_id
+func _find_entity_by_unique_id_visual(panel, unique_id: String):
+	if not panel or not is_instance_valid(panel):
+		return null
+
+	for entity in panel.entity_nodes:
+		if entity and is_instance_valid(entity) and entity.entity_data.get("unique_id") == unique_id:
 			return entity
 	return null
