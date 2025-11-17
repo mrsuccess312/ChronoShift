@@ -243,7 +243,7 @@ func _disable_all_input() -> void:
 
 	# Disable all entity interaction
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if entity and is_instance_valid(entity) and entity.has_node("Sprite"):
 				entity.get_node("Sprite").mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -527,7 +527,7 @@ func _prepare_for_carousel() -> void:
 
 	# Hide all HP/DMG labels
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				if entity.has_node("HPLabel"):
 					entity.get_node("HPLabel").visible = false
@@ -537,7 +537,7 @@ func _prepare_for_carousel() -> void:
 	# Un-gray dead entities in Future (they're about to become Present)
 	var future_panel = timeline_panels[3]
 	if future_panel and future_panel.timeline_type == "future":
-		for entity in future_panel.entities:
+		for entity in future_panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				entity.modulate = Color(1, 1, 1, 1)  # Restore normal color
 
@@ -554,7 +554,7 @@ func _show_labels_after_carousel() -> void:
 		_sync_entities_to_state(present_panel)
 
 		# Then show labels with correct values
-		for entity in present_panel.entities:
+		for entity in present_panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				if entity.has_node("HPLabel"):
 					entity.get_node("HPLabel").visible = true
@@ -573,7 +573,7 @@ func _sync_entities_to_state(panel: Panel) -> void:
 		return
 
 	var enemy_index = 0
-	for entity in panel.entities:
+	for entity in panel.entity_nodes:
 		if not entity or not is_instance_valid(entity):
 			continue
 
@@ -781,7 +781,8 @@ func _create_timeline_entities(tp: Panel) -> void:
 		entity_node.position = world_pos
 
 		tp.add_child(entity_node)
-		tp.entities.append(entity_node)
+		tp.entity_nodes.append(entity_node)
+		tp.entities.append(entity_node)  # Also append to backwards-compatible array
 
 		# Gray out dead entities in Future timeline
 		if tp.timeline_type == "future" and not entity_data.is_alive():
@@ -845,7 +846,7 @@ func _create_timeline_arrows(tp: Panel) -> void:
 
 func _find_entity_node_by_id(panel: Panel, unique_id: String) -> Node2D:
 	"""Find visual entity node by unique_id"""
-	for node in panel.entities:
+	for node in panel.entity_nodes:
 		if node.entity_data.get("unique_id") == unique_id:
 			return node
 	return null
@@ -889,7 +890,7 @@ func _update_all_timeline_displays() -> void:
 
 func _update_timeline_ui_visibility(tp: Panel) -> void:
 	"""Update UI element visibility based on timeline_type"""
-	for entity in tp.entities:
+	for entity in tp.entity_nodes:
 		if not entity or not is_instance_valid(entity):
 			continue
 

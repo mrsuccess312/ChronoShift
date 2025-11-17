@@ -15,8 +15,12 @@ var entity_data_list: Array[EntityData] = []  # All entities in this timeline
 # Grid structure (cells can contain entity references)
 var cell_entities: Array = []  # 2D array [row][col] -> EntityData or null
 
+# ===== BACKWARDS COMPATIBILITY =====
+var state: Dictionary = {}  # Old Dictionary-based state (for compatibility)
+var entities: Array = []  # Alias for entity_nodes (for compatibility)
+
 # ===== VISUAL NODES =====
-var entity_nodes: Array = []  # Entity visual nodes (renamed from "entities")
+var entity_nodes: Array = []  # Entity visual nodes
 var arrows: Array = []  # Arrow visual nodes
 
 var slot_index: int = -1  # Current carousel slot position
@@ -323,6 +327,7 @@ func clear_entities():
 		if entity and is_instance_valid(entity):
 			entity.queue_free()
 	entity_nodes.clear()
+	entities.clear()  # Clear backwards-compatible array too
 
 func clear_arrows():
 	"""Remove all arrow nodes from panel"""
