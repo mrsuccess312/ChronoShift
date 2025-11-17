@@ -586,13 +586,19 @@ func _sync_entities_to_state(panel: Panel) -> void:
 		if entity.is_player:
 			# Update player entity data from panel state
 			if panel.state.has("player"):
+				# CRITICAL: Preserve unique_id before overwriting
+				var saved_unique_id = entity.entity_data.get("unique_id", "")
 				entity.entity_data = panel.state["player"].duplicate()
+				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
 				entity.update_display()
 				print("  Synced player: HP=", entity.entity_data["hp"])
 		else:
 			# Update enemy entity data from panel state
 			if panel.state.has("enemies") and enemy_index < panel.state["enemies"].size():
+				# CRITICAL: Preserve unique_id before overwriting
+				var saved_unique_id = entity.entity_data.get("unique_id", "")
 				entity.entity_data = panel.state["enemies"][enemy_index].duplicate()
+				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
 				entity.update_display()
 				print("  Synced enemy ", enemy_index, ": HP=", entity.entity_data["hp"])
 				enemy_index += 1
