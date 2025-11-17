@@ -64,6 +64,7 @@ func initialize(type: String, slot: int):
 	timeline_type = type
 	slot_index = slot
 	update_cell_hover_colors()
+	apply_timeline_visibility_rules()  # Apply visibility rules for this timeline type
 
 func _process(delta: float):
 	"""Handle hover animation each frame"""
@@ -120,6 +121,116 @@ func update_cell_hover_colors():
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.set_hover_color(hover_color)
+
+# ===== TIMELINE VISIBILITY RULES =====
+
+func set_timeline_type(new_type: String):
+	"""Change timeline type and apply visibility rules"""
+	if timeline_type != new_type:
+		print("Timeline type changed: ", timeline_type, " → ", new_type)
+		timeline_type = new_type
+
+		# Update cell hover colors
+		update_cell_hover_colors()
+
+		# Apply visibility rules
+		apply_timeline_visibility_rules()
+
+func apply_timeline_visibility_rules():
+	"""Apply visibility rules based on current timeline_type"""
+	print("📋 Applying visibility rules for ", timeline_type, " timeline")
+
+	match timeline_type:
+		"past":
+			_apply_past_visibility()
+		"present":
+			_apply_present_visibility()
+		"future":
+			_apply_future_visibility()
+		"decorative":
+			_apply_decorative_visibility()
+
+func _apply_past_visibility():
+	"""PAST: No arrows, HP visible, DMG on hover"""
+	# Hide all arrows
+	for arrow in arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = false
+
+	# Entity visibility
+	for node in entity_nodes:
+		if not node or not is_instance_valid(node):
+			continue
+
+		# HP always visible
+		if node.has_node("HPLabel"):
+			node.get_node("HPLabel").visible = true
+
+		# Damage only on hover (handled by entity.gd hover system)
+		if node.has_node("DamageLabel"):
+			node.get_node("DamageLabel").visible = false
+
+func _apply_present_visibility():
+	"""PRESENT: Player arrows visible, HP visible, DMG visible"""
+	# Show only player team arrows (is_enemy = false)
+	# For now, show all arrows (will be refined with arrow source tracking)
+	for arrow in arrows:
+		if not arrow or not is_instance_valid(arrow):
+			continue
+		arrow.visible = true
+
+	# Entity visibility
+	for node in entity_nodes:
+		if not node or not is_instance_valid(node):
+			continue
+
+		# HP always visible
+		if node.has_node("HPLabel"):
+			node.get_node("HPLabel").visible = true
+
+		# Damage always visible
+		if node.has_node("DamageLabel"):
+			node.get_node("DamageLabel").visible = true
+
+func _apply_future_visibility():
+	"""FUTURE: Enemy arrows visible, HP visible, DMG on hover"""
+	# Show only enemy team arrows (is_enemy = true)
+	# For now, show all arrows (will be refined with arrow source tracking)
+	for arrow in arrows:
+		if not arrow or not is_instance_valid(arrow):
+			continue
+		arrow.visible = true
+
+	# Entity visibility
+	for node in entity_nodes:
+		if not node or not is_instance_valid(node):
+			continue
+
+		# HP always visible
+		if node.has_node("HPLabel"):
+			node.get_node("HPLabel").visible = true
+
+		# Damage only on hover
+		if node.has_node("DamageLabel"):
+			node.get_node("DamageLabel").visible = false
+
+func _apply_decorative_visibility():
+	"""DECORATIVE: Everything hidden/cleared"""
+	# Hide all arrows
+	for arrow in arrows:
+		if arrow and is_instance_valid(arrow):
+			arrow.visible = false
+
+	# Hide all entity UI elements
+	for node in entity_nodes:
+		if not node or not is_instance_valid(node):
+			continue
+
+		if node.has_node("HPLabel"):
+			node.get_node("HPLabel").visible = false
+
+		if node.has_node("DamageLabel"):
+			node.get_node("DamageLabel").visible = false
 
 # ===== ENTITY DATA MANAGEMENT (NEW) =====
 
