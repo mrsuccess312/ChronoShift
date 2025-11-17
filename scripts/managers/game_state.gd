@@ -85,6 +85,34 @@ var timeline_states: Dictionary = {
 }
 
 # ============================================================================
+# REAL_FUTURE TIMELINE TRACKING (NEW)
+# ============================================================================
+#
+# CONCEPT: Separate PREDICTED_FUTURE from REAL_FUTURE
+#
+# PROBLEM: Temporary effects (conscription, twins, damage boosts) are tracked
+# with scattered flags that are easy to forget to reset.
+#
+# SOLUTION: When cards with temporary effects are played:
+# 1. PREDICTED_FUTURE - Shows player the immediate effect (with temporary boost)
+# 2. REAL_FUTURE - What actually happens after temporary effects expire
+#
+# After combat: PRESENT → PREDICTED_FUTURE → REAL_FUTURE
+#
+# This eliminates need for:
+# - conscription_active flag
+# - original_player_data storage
+# - damage_boost_active flag
+# - Manual temporary entity cleanup
+# ============================================================================
+
+## Real future entity state (after temporary effects expire)
+var real_future_entities: Array[EntityData] = []
+
+## Whether REAL_FUTURE differs from PREDICTED_FUTURE
+var has_real_future: bool = false
+
+# ============================================================================
 # TEMPORARY ENTITIES
 # ============================================================================
 
@@ -125,6 +153,9 @@ func reset_turn_effects() -> void:
 	future_miss_flags.clear()
 	future_redirect_flag = null
 	temporary_entities.clear()
+
+	# NEW: Clear REAL_FUTURE tracking
+	clear_real_future()
 
 
 ## Clear conscription state
@@ -187,8 +218,86 @@ func set_enemy_miss(enemy_index: int, will_miss: bool = true) -> void:
 		future_miss_flags.erase(enemy_index)
 
 # ============================================================================
+# REAL_FUTURE TIMELINE METHODS (NEW)
+# ============================================================================
+
+## Store the REAL future state (after temporary effects expire)
+## Called when a card with temporary effects is played
+func set_real_future(entities: Array[EntityData]) -> void:
+	real_future_entities.clear()
+	for entity in entities:
+		real_future_entities.append(entity.duplicate_entity())
+	has_real_future = true
+	print("📍 REAL_FUTURE stored (", real_future_entities.size(), " entities)")
+
+
+## Get REAL future entity state
+## Returns the entity data for what happens after temporary effects expire
+func get_real_future() -> Array[EntityData]:
+	return real_future_entities
+
+
+## Clear REAL future state
+## Called at end of turn or when REAL_FUTURE is applied
+func clear_real_future() -> void:
+	real_future_entities.clear()
+	has_real_future = false
+
+
+## Check if REAL_FUTURE should be applied after combat
+## Returns true if there's a real future that differs from predicted
+func should_apply_real_future() -> bool:
+	return has_real_future
+
+# ============================================================================
 # INITIALIZATION
 # ============================================================================
 
 func _ready() -> void:
 	print("GameState singleton initialized")
+
+
+# =============================================================================
+# REAL_FUTURE USAGE DOCUMENTATION
+# =============================================================================
+#
+# USAGE PATTERN:
+#
+# When card with temporary effect is played:
+# 1. Apply temporary effect to PRESENT timeline
+# 2. Calculate PREDICTED_FUTURE (includes temporary effect)
+# 3. Calculate REAL_FUTURE (without temporary effect)
+# 4. GameState.set_real_future(real_future_entities)
+#
+# After combat ends:
+# 1. Carousel slides (PRESENT → PAST, FUTURE → PRESENT)
+# 2. Check GameState.should_apply_real_future()
+# 3. If true: Replace new PRESENT with REAL_FUTURE entities
+# 4. Call GameState.clear_real_future()
+#
+# EXAMPLE: Conscript Past Enemy card
+# - PRESENT: Conscripted enemy fights as player (temporary)
+# - PREDICTED_FUTURE: Shows combat result with conscripted enemy
+# - REAL_FUTURE: Shows real player returning after combat
+# - After combat: Real player entity replaces conscripted enemy (REAL_FUTURE applied)
+#
+# EXAMPLE: Damage Boost card
+# - PRESENT: Player has +10 damage (temporary)
+# - PREDICTED_FUTURE: Shows combat with boosted damage
+# - REAL_FUTURE: Shows player with normal damage
+# - After combat: Player damage returns to normal (REAL_FUTURE applied)
+#
+# EXAMPLE: Summon Twin card
+# - PRESENT: Twin entity appears (is_temporary = true)
+# - PREDICTED_FUTURE: Shows combat with twin fighting
+# - REAL_FUTURE: Shows timeline without twin (expired)
+# - After combat: Twin disappears (REAL_FUTURE applied)
+#
+# BENEFITS:
+# - Eliminates scattered temporary effect flags
+# - Single source of truth for post-combat state
+# - Impossible to forget to reset temporary effects
+# - Clean separation of concerns
+# - Works with EntityData model naturally
+#
+# =============================================================================
