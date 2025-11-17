@@ -387,7 +387,10 @@ func _execute_complete_turn() -> void:
 	print("📋 Recreating entities after carousel...")
 	_create_timeline_entities(timeline_panels[1])  # Past
 	_create_timeline_entities(timeline_panels[2])  # Present
-	print("  ✅ Entities recreated")
+	print("  ✅ Entities recreated: ", timeline_panels[2].entity_nodes.size(), " nodes in Present")
+	# Debug: Print unique IDs
+	for node in timeline_panels[2].entity_nodes:
+		print("    Node unique_id: ", node.entity_data.get("unique_id", "NO ID"))
 
 	# Phase 2: Post-carousel - show labels on new Present
 	_show_labels_after_carousel()
