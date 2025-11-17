@@ -2,14 +2,22 @@ extends Panel
 
 # ===== TIMELINE PANEL SCRIPT =====
 # Self-contained panel with all its data and entities
-# Refactored from game_manager.gd TimelinePanel class
+# Refactored to use EntityData models instead of Dictionary states
 
 const GRID_CELL_SCENE = preload("res://scenes/grid_cell.tscn")
 
 var timeline_type: String = "decorative"  # "past", "present", "future", "decorative"
-var state: Dictionary = {}  # Game state: { player: {...}, enemies: [...] }
-var entities: Array = []  # Entity visual nodes
+
+# ===== ENTITY DATA MODEL (NEW) =====
+# Entity data (the source of truth)
+var entity_data_list: Array[EntityData] = []  # All entities in this timeline
+# Grid structure (cells can contain entity references)
+var cell_entities: Array = []  # 2D array [row][col] -> EntityData or null
+
+# ===== VISUAL NODES =====
+var entity_nodes: Array = []  # Entity visual nodes (renamed from "entities")
 var arrows: Array = []  # Arrow visual nodes
+
 var slot_index: int = -1  # Current carousel slot position
 
 # Grid system
@@ -37,6 +45,14 @@ func _ready():
 
 	# Set random time offset for unique phase (0 to 2*PI)
 	time_offset = randf() * TAU
+
+	# Initialize cell_entities grid (5x5 of nulls)
+	cell_entities = []
+	for row in range(GRID_ROWS):
+		var row_array = []
+		for col in range(GRID_COLS):
+			row_array.append(null)  # No entity in cell
+		cell_entities.append(row_array)
 
 	setup_grid()
 	# Update hover colors after grid is set up
@@ -105,12 +121,96 @@ func update_cell_hover_colors():
 			if cell:
 				cell.set_hover_color(hover_color)
 
+# ===== ENTITY DATA MANAGEMENT (NEW) =====
+
+func add_entity(entity: EntityData, row: int, col: int) -> bool:
+	"""Add entity to timeline at grid position"""
+	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+		print("Invalid grid position: (", row, ", ", col, ")")
+		return false
+
+	if cell_entities[row][col] != null:
+		print("Cell (", row, ", ", col, ") already occupied!")
+		return false
+
+	# Set grid position in entity
+	entity.grid_row = row
+	entity.grid_col = col
+
+	# Add to arrays
+	entity_data_list.append(entity)
+	cell_entities[row][col] = entity
+
+	print("Added entity '", entity.entity_name, "' at (", row, ", ", col, ")")
+	return true
+
+func remove_entity(entity: EntityData):
+	"""Remove entity from timeline"""
+	if entity in entity_data_list:
+		# Clear grid cell
+		if entity.grid_row >= 0 and entity.grid_col >= 0:
+			cell_entities[entity.grid_row][entity.grid_col] = null
+
+		# Remove from entities list
+		entity_data_list.erase(entity)
+		print("Removed entity: ", entity.entity_name)
+
+func get_entity_at(row: int, col: int) -> EntityData:
+	"""Get entity at grid position (or null)"""
+	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+		return null
+	return cell_entities[row][col]
+
+func move_entity(entity: EntityData, new_row: int, new_col: int) -> bool:
+	"""Move entity to new grid position"""
+	if new_row < 0 or new_row >= GRID_ROWS or new_col < 0 or new_col >= GRID_COLS:
+		return false
+
+	if cell_entities[new_row][new_col] != null:
+		return false  # Cell occupied
+
+	# Clear old position
+	if entity.grid_row >= 0 and entity.grid_col >= 0:
+		cell_entities[entity.grid_row][entity.grid_col] = null
+
+	# Set new position
+	cell_entities[new_row][new_col] = entity
+	entity.grid_row = new_row
+	entity.grid_col = new_col
+
+	return true
+
+func get_player_entities() -> Array[EntityData]:
+	"""Get all player/ally entities (is_enemy = false)"""
+	var players: Array[EntityData] = []
+	for entity in entity_data_list:
+		if not entity.is_enemy:
+			players.append(entity)
+	return players
+
+func get_enemy_entities() -> Array[EntityData]:
+	"""Get all enemy entities (is_enemy = true)"""
+	var enemies: Array[EntityData] = []
+	for entity in entity_data_list:
+		if entity.is_enemy:
+			enemies.append(entity)
+	return enemies
+
+func clear_all_entities():
+	"""Remove all entities from timeline (data model)"""
+	entity_data_list.clear()
+	for row in range(GRID_ROWS):
+		for col in range(GRID_COLS):
+			cell_entities[row][col] = null
+
+# ===== VISUAL ENTITY NODES =====
+
 func clear_entities():
-	"""Remove all entity nodes from panel"""
-	for entity in entities:
+	"""Remove all entity visual nodes from panel"""
+	for entity in entity_nodes:
 		if entity and is_instance_valid(entity):
 			entity.queue_free()
-	entities.clear()
+	entity_nodes.clear()
 
 func clear_arrows():
 	"""Remove all arrow nodes from panel"""
@@ -120,9 +220,71 @@ func clear_arrows():
 	arrows.clear()
 
 func clear_all():
-	"""Clear both entities and arrows"""
-	clear_entities()
+	"""Clear both data models and visual nodes"""
+	clear_all_entities()  # Clear data models
+	clear_entities()  # Clear visual nodes
 	clear_arrows()
+
+# ===== BACKWARDS COMPATIBILITY HELPERS (TEMPORARY) =====
+
+func get_state_dict() -> Dictionary:
+	"""TEMPORARY: Convert EntityData back to Dictionary for compatibility"""
+	var player_entities = get_player_entities()
+	var enemy_entities = get_enemy_entities()
+
+	var state = {}
+
+	if player_entities.size() > 0:
+		var player = player_entities[0]
+		state["player"] = {
+			"name": player.entity_name,
+			"hp": player.hp,
+			"max_hp": player.max_hp,
+			"damage": player.damage
+		}
+
+	state["enemies"] = []
+	for enemy in enemy_entities:
+		state["enemies"].append({
+			"name": enemy.entity_name,
+			"hp": enemy.hp,
+			"max_hp": enemy.max_hp,
+			"damage": enemy.damage
+		})
+
+	return state
+
+func load_from_state_dict(state: Dictionary):
+	"""TEMPORARY: Load entities from old Dictionary format"""
+	clear_all_entities()
+
+	# Load player
+	if state.has("player"):
+		var player_dict = state["player"]
+		var player = EntityData.create_player()
+		player.entity_name = player_dict.get("name", "Chronomancer")
+		player.hp = player_dict.get("hp", 100)
+		player.max_hp = player_dict.get("max_hp", 100)
+		player.damage = player_dict.get("damage", 15)
+
+		# Place at default player position
+		var player_pos = get_grid_position_for_entity(0, true, state.get("enemies", []).size())
+		add_entity(player, player_pos.x, player_pos.y)
+
+	# Load enemies
+	if state.has("enemies"):
+		var enemy_count = state["enemies"].size()
+		for i in range(enemy_count):
+			var enemy_dict = state["enemies"][i]
+			var enemy = EntityData.create_enemy(
+				enemy_dict.get("name", "Enemy"),
+				enemy_dict.get("hp", 50),
+				enemy_dict.get("damage", 10)
+			)
+
+			# Place at grid position
+			var enemy_pos = get_grid_position_for_entity(i, false, enemy_count)
+			add_entity(enemy, enemy_pos.x, enemy_pos.y)
 
 # ===== GRID SYSTEM =====
 
@@ -334,32 +496,22 @@ func get_cell_center_position(row: int, col: int) -> Vector2:
 	return Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
 
 func is_cell_occupied(row: int, col: int) -> bool:
-	"""Check if a cell is occupied by an entity"""
-	for entity in entities:
-		if not is_instance_valid(entity):
-			continue
-		var entity_cell = get_cell_from_entity_position(entity)
-		if entity_cell.x == row and entity_cell.y == col:
-			return true
-	return false
+	"""Check if a cell is occupied by an entity (using new data model)"""
+	return get_entity_at(row, col) != null
 
-func get_leftmost_enemy() -> Node2D:
-	"""Get the leftmost enemy entity (lowest x-coordinate, then lowest y if tied)
-	Used for targeting mechanics"""
-	var leftmost = null
-	var leftmost_cell = Vector2i(999, 999)
+func get_leftmost_enemy() -> EntityData:
+	"""Get the leftmost enemy entity (lowest col, then lowest row if tied)
+	Used for targeting mechanics - NOW RETURNS EntityData"""
+	var leftmost: EntityData = null
+	var leftmost_pos = Vector2i(999, 999)
 
-	for entity in entities:
-		if not is_instance_valid(entity):
-			continue
-		if entity.is_player:
-			continue
-
-		var entity_cell = get_cell_from_entity_position(entity)
-		# Check if this is more to the left (lower col), or same col but lower row
-		if entity_cell.y < leftmost_cell.y or (entity_cell.y == leftmost_cell.y and entity_cell.x < leftmost_cell.x):
-			leftmost = entity
-			leftmost_cell = entity_cell
+	for entity in entity_data_list:
+		if entity.is_enemy and entity.is_alive():
+			var entity_pos = Vector2i(entity.grid_row, entity.grid_col)
+			# Check if this is more to the left (lower col), or same col but lower row
+			if entity_pos.y < leftmost_pos.y or (entity_pos.y == leftmost_pos.y and entity_pos.x < leftmost_pos.x):
+				leftmost = entity
+				leftmost_pos = entity_pos
 
 	return leftmost
 
@@ -430,13 +582,11 @@ func get_valid_target_cells(card_type: String) -> Array:
 	match card_type:
 		"melee_attack":
 			# Adjacent to player only
-			var player_cell = Vector2i(-1, -1)
-			for entity in entities:
-				if is_instance_valid(entity) and entity.is_player:
-					player_cell = get_cell_from_entity_position(entity)
-					break
+			var player_entities = get_player_entities()
+			if player_entities.size() > 0:
+				var player = player_entities[0]
+				var player_cell = Vector2i(player.grid_row, player.grid_col)
 
-			if player_cell.x >= 0:
 				# Check all 8 surrounding cells
 				for dr in [-1, 0, 1]:
 					for dc in [-1, 0, 1]:
@@ -449,9 +599,9 @@ func get_valid_target_cells(card_type: String) -> Array:
 
 		"ranged_attack":
 			# Any cell with an enemy
-			for entity in entities:
-				if is_instance_valid(entity) and not entity.is_player:
-					valid_cells.append(get_cell_from_entity_position(entity))
+			for entity in entity_data_list:
+				if entity.is_enemy and entity.is_alive():
+					valid_cells.append(Vector2i(entity.grid_row, entity.grid_col))
 
 		"area_attack":
 			# All cells
@@ -485,14 +635,31 @@ func highlight_valid_targets(card_type: String):
 # INTEGRATION DOCUMENTATION
 # =============================================================================
 #
-# This timeline_panel script provides a complete grid-based positioning system
-# for entities, hazards, and card targeting. Key integration points:
+# This timeline_panel script now uses EntityData models for clean state management.
+#
+# NEW ENTITY DATA MODEL:
+# - entity_data_list: Array[EntityData] - Source of truth for all entities
+# - cell_entities: Array[Array] - 2D grid [row][col] -> EntityData or null
+# - entity_nodes: Array - Visual Node2D representations (display only)
+#
+# ENTITY MANAGEMENT (NEW):
+# - add_entity(entity, row, col) -> bool - Add entity to timeline
+# - remove_entity(entity) - Remove entity from timeline
+# - get_entity_at(row, col) -> EntityData - Get entity at position
+# - move_entity(entity, new_row, new_col) -> bool - Move entity
+# - get_player_entities() -> Array[EntityData] - Get all players
+# - get_enemy_entities() -> Array[EntityData] - Get all enemies
+# - clear_all_entities() - Remove all entity data
+#
+# BACKWARDS COMPATIBILITY (TEMPORARY):
+# - get_state_dict() -> Dictionary - Convert EntityData to old format
+# - load_from_state_dict(state) - Load from old Dictionary format
 #
 # ENTITY POSITIONING (game_manager.gd):
 # - Use get_grid_position_for_entity(index, is_player, total_enemies) for layout
 # - Use get_cell_center_position(row, col) to convert grid coords to world pos
-# - Player is always at (2, 1), enemies positioned based on count (see function)
-# - get_leftmost_enemy() returns the primary target for player attacks
+# - Player is always at (3, 2), enemies positioned based on count
+# - get_leftmost_enemy() returns EntityData (not Node2D)
 #
 # HAZARD SYSTEM (future card effects):
 # - mark_cell_as_hazard(row, col, type, data) to create hazards
@@ -503,7 +670,7 @@ func highlight_valid_targets(card_type: String):
 # CARD TARGETING:
 # - get_valid_target_cells(card_type) returns array of valid cells
 # - highlight_valid_targets(card_type) shows green highlights
-# - is_cell_occupied(row, col) checks for entity presence
+# - is_cell_occupied(row, col) now uses EntityData model
 # - Supports: "melee_attack", "ranged_attack", "area_attack", "placement"
 #
 # SETTINGS (game_manager.gd):
