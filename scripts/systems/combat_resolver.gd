@@ -181,9 +181,20 @@ func _find_entity_by_id(present_panel: Panel, unique_id: String) -> EntityData:
 ## Find visual entity node by unique_id
 func _find_entity_node(present_panel: Panel, unique_id: String) -> Node2D:
 	"""Find visual entity node by unique_id"""
-	for node in present_panel.entity_nodes:
+	print("    DEBUG _find_entity_node: Looking for ID: ", unique_id)
+	print("    DEBUG: entity_nodes array size: ", present_panel.entity_nodes.size())
+	for i in range(present_panel.entity_nodes.size()):
+		var node = present_panel.entity_nodes[i]
+		print("      Node[", i, "] entity_data type: ", typeof(node.entity_data))
+		print("      Node[", i, "] has unique_id: ", node.entity_data.has("unique_id"))
+		if node.entity_data.has("unique_id"):
+			var node_id = node.entity_data.get("unique_id")
+			print("      Node[", i, "] unique_id value: ", node_id)
+			print("      Comparing: '", node_id, "' == '", unique_id, "' ? ", (node_id == unique_id))
 		if node.entity_data.get("unique_id") == unique_id:
+			print("      MATCH FOUND at index ", i)
 			return node
+	print("      NO MATCH FOUND")
 	return null
 
 
