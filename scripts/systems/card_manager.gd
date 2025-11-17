@@ -154,6 +154,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				player_entity.heal(effect_value)
 				print("Healed ", effect_value, " HP")
 				Events.hp_updated.emit(null, player_entity.hp)
+				# Update visual display
+				_update_entity_visuals(present_tp, player_entity)
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
@@ -166,6 +168,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				if died:
 					present_tp.entity_data_list.erase(target)
 					print("  Enemy defeated!")
+				# Update visual display
+				_update_entity_visuals(present_tp, target)
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
@@ -176,6 +180,9 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				var died = enemy.take_damage(effect_value)
 				if died:
 					defeated.append(enemy)
+				else:
+					# Update visual display for living enemies
+					_update_entity_visuals(present_tp, enemy)
 			for enemy in defeated:
 				present_tp.entity_data_list.erase(enemy)
 			print("Dealt ", effect_value, " damage to all enemies")
@@ -191,6 +198,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				GameState.damage_boost_active = true  # Mark for reset next turn
 				print("Boosted damage by ", effect_value, " (will reset next turn from ", GameState.original_damage_before_boost, " to ", player_entity.damage, ")")
 				Events.damage_display_updated.emit(player_entity.damage)
+				# Update visual display
+				_update_entity_visuals(present_tp, player_entity)
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
@@ -217,6 +226,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					present_player.hp = past_player.hp
 					print("HP swapped from Past: now at ", present_player.hp, " HP")
 					Events.hp_updated.emit(null, present_player.hp)
+					# Update visual display
+					_update_entity_visuals(present_tp, present_player)
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
 			else:
@@ -306,6 +317,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					player_entity.heal(effect_value)
 					print("Borrowed ", effect_value, " HP from Future")
 					Events.hp_updated.emit(null, player_entity.hp)
+					# Update visual display
+					_update_entity_visuals(present_tp, player_entity)
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
 				else:
@@ -343,6 +356,9 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						if died:
 							present_tp.entity_data_list.erase(entity)
 							print("  Enemy defeated!")
+						else:
+							# Update visual display for living enemies
+							_update_entity_visuals(present_tp, entity)
 						# Sync to backwards-compatible state
 						present_tp.state = present_tp.get_state_dict()
 						break
@@ -437,6 +453,9 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 
 						if died:
 							present_tp.entity_data_list.erase(present_entity)
+						else:
+							# Update visual display for living enemies
+							_update_entity_visuals(present_tp, present_entity)
 						# Sync to backwards-compatible state
 						present_tp.state = present_tp.get_state_dict()
 
@@ -468,6 +487,9 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						if died:
 							present_tp.entity_data_list.erase(present_enemies[0])
 							print("  Enemy defeated!")
+						else:
+							# Update visual display for damaged enemy
+							_update_entity_visuals(present_tp, present_enemies[0])
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
 					print("  ✅ Conscription complete")
@@ -701,3 +723,22 @@ func _find_entity_by_unique_id_visual(panel, unique_id: String):
 		if entity and is_instance_valid(entity) and entity.entity_data.get("unique_id") == unique_id:
 			return entity
 	return null
+
+
+## Update visual entity node display from EntityData
+func _update_entity_visuals(panel, entity_data: EntityData):
+	"""Find visual node for EntityData and update its display"""
+	if not panel or not entity_data:
+		return
+
+	var visual_node = _find_entity_by_unique_id_visual(panel, entity_data.unique_id)
+	if visual_node and is_instance_valid(visual_node):
+		# Update the visual node's entity_data dictionary
+		visual_node.entity_data["hp"] = entity_data.hp
+		visual_node.entity_data["max_hp"] = entity_data.max_hp
+		visual_node.entity_data["damage"] = entity_data.damage
+
+		# Call update_display to refresh visual
+		if visual_node.has_method("update_display"):
+			visual_node.update_display()
+			print("  🔄 Updated visual display for ", entity_data.entity_name)
