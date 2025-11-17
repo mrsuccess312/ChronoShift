@@ -116,6 +116,7 @@ func _initialize_systems() -> void:
 func _connect_events() -> void:
 	"""Connect to global event bus"""
 	Events.damage_dealt.connect(_on_damage_dealt)
+	Events.combat_started.connect(_on_combat_started)
 	Events.combat_ended.connect(_on_combat_ended)
 	Events.timer_updated.connect(_on_timer_updated)
 	Events.wave_changed.connect(_on_wave_changed)
@@ -943,9 +944,34 @@ func _update_timeline_ui_visibility(tp: Panel) -> void:
 # EVENT HANDLERS
 # ============================================================================
 
+func _on_combat_started() -> void:
+	"""Handle combat start - disable UI to prevent freeze"""
+	print("  Combat phase started - disabling UI...")
+
+	# Disable card interactions
+	past_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	present_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	future_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Disable grid cell interactions (timeline panels)
+	for panel in timeline_panels:
+		if panel and is_instance_valid(panel):
+			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
 func _on_combat_ended() -> void:
-	"""Handle combat end"""
-	print("  Combat phase ended")
+	"""Handle combat end - re-enable UI"""
+	print("  Combat phase ended - re-enabling UI...")
+
+	# Re-enable card interactions
+	past_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	present_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	future_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Re-enable grid cell interactions (timeline panels)
+	for panel in timeline_panels:
+		if panel and is_instance_valid(panel):
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 func _on_damage_dealt(target: Node2D, damage: int) -> void:
