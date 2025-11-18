@@ -309,28 +309,29 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
+					# Duplicate the enemy for PRESENT (don't modify the original in PAST!)
+					var conscripted_enemy = past_enemy.duplicate_entity()
+					conscripted_enemy.grid_row = player_row
+					conscripted_enemy.grid_col = player_col
+					conscripted_enemy.is_enemy = false
+					conscripted_enemy.is_conscripted = true
+
 					# Move player to enemy's PAST position (coordinates only, for combat logic)
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
-					# Move conscripted enemy from PAST to player's position in PRESENT
-					past_enemy.grid_row = player_row
-					past_enemy.grid_col = player_col
-					past_enemy.is_enemy = false
-					past_enemy.is_conscripted = true
-
-					# Update PRESENT grid - only conscripted enemy, remove player from old position
-					present_tp.cell_entities[player_row][player_col] = past_enemy
+					# Update PRESENT grid - only conscripted enemy at player's old position
+					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
 					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
-					present_tp.entity_data_list.append(past_enemy)
+					present_tp.entity_data_list.append(conscripted_enemy)
 
-					# Update PAST grid to show player at enemy's old position
+					# Update PAST grid to show player at enemy's old position (enemy stays in PAST too)
 					past_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
 
 					print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
-					print("  Conscripted ", past_enemy.entity_name, " at player's old position: (", past_enemy.grid_row, ", ", past_enemy.grid_col, ")")
+					print("  Conscripted ", conscripted_enemy.entity_name, " at player's old position: (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
 
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
@@ -633,29 +634,30 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
+					# Duplicate the enemy for PRESENT (don't modify the original in PAST!)
+					var conscripted_enemy = past_enemy.duplicate_entity()
+					conscripted_enemy.grid_row = player_row
+					conscripted_enemy.grid_col = player_col
+					conscripted_enemy.is_enemy = false
+					conscripted_enemy.is_conscripted = true
+
 					# Move player to enemy's PAST position (coordinates only, for combat logic)
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
-					# Move conscripted enemy from PAST to player's position in PRESENT
-					past_enemy.grid_row = player_row
-					past_enemy.grid_col = player_col
-					past_enemy.is_enemy = false
-					past_enemy.is_conscripted = true
-
-					# Update PRESENT grid - only conscripted enemy, remove player from old position
-					present_tp.cell_entities[player_row][player_col] = past_enemy
+					# Update PRESENT grid - only conscripted enemy at player's old position
+					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
 					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
-					present_tp.entity_data_list.append(past_enemy)
+					present_tp.entity_data_list.append(conscripted_enemy)
 
-					# Update PAST grid to show player at enemy's old position
+					# Update PAST grid to show player at enemy's old position (enemy stays in PAST too)
 					past_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
 
 					print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
-					print("  Conscripted ", past_enemy.entity_name, " at player's old position: (", past_enemy.grid_row, ", ", past_enemy.grid_col, ")")
-					print("  ", past_enemy.entity_name, " now fights for you!")
+					print("  Conscripted ", conscripted_enemy.entity_name, " at player's old position: (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
+					print("  ", conscripted_enemy.entity_name, " now fights for you!")
 
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
