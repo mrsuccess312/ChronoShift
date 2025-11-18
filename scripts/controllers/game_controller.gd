@@ -318,6 +318,9 @@ func _initialize_game() -> void:
 	player.damage = 15
 	present_panel.add_entity(player, 3, 2)  # Row 1, Column 0
 
+	# Store player's unique_id in GameState for tracking across timelines
+	GameState.player_unique_id = player.unique_id
+
 	# Create enemy entities
 	var enemy_a = EntityData.create_enemy("Chrono-Beast A", 45, 12)
 	present_panel.add_entity(enemy_a, 1, 1)  # Row 0, Column 2

@@ -82,7 +82,15 @@ func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) 
 		print("    No attackers in ", team_name)
 		return
 
-	# Each attacker attacks their target sequentially
+	# Sort attackers by grid position (left to right, top to bottom)
+	# This ensures attacks execute in visual order regardless of entity_data_list order
+	attackers.sort_custom(func(a, b):
+		if a.grid_col != b.grid_col:
+			return a.grid_col < b.grid_col  # Left to right
+		return a.grid_row < b.grid_row  # Top to bottom (tiebreaker)
+	)
+
+	# Each attacker attacks their target sequentially (now in grid order)
 	for attacker in attackers:
 		# Skip if no target assigned or will miss
 		if attacker.attack_target_id == "" or attacker.will_miss:

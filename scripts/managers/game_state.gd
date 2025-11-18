@@ -38,6 +38,9 @@ var max_time: float = 360.0
 # PLAYER STATS
 # ============================================================================
 
+## Unique ID of the player entity (set at game start, used to track player across timelines)
+var player_unique_id: String = ""
+
 ## Base damage value for player attacks
 var base_player_damage: int = 15
 
