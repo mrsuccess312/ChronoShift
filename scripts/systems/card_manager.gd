@@ -458,16 +458,28 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 		CardDatabase.EffectType.TIMELINE_SCRAMBLE:
 			# Apply randomization to ALL entities (enemies and player)
 			var miss_count = 0
+			var missing_entity_ids = []
 			for entity in present_tp.entity_data_list:
 				if randf() < effect_value:
 					entity.will_miss = true
+					missing_entity_ids.append(entity.unique_id)
 					miss_count += 1
 					print("Timeline Scramble: ", entity.entity_name, " will miss")
 			print("Timeline Scramble: ", miss_count, " entities will miss in Future!")
 			# Sync to backwards-compatible state
 			present_tp.state = present_tp.get_state_dict()
-			# Request future recalculation to apply miss flags in FUTURE
+
+			# Request future recalculation to apply miss flags in FUTURE FIRST
 			Events.future_recalculation_requested.emit()
+
+			# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+			GameState.ensure_real_future_initialized(future_tp)
+			# Clear will_miss for affected entities in REAL_FUTURE (they only miss one turn)
+			for entity_id in missing_entity_ids:
+				GameState.modify_real_future_entity(entity_id, func(e):
+					e.will_miss = false
+				)
+			print("  📍 REAL_FUTURE updated (entities will only miss one turn)")
 
 
 ## Apply targeted card effects
