@@ -243,7 +243,13 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 		# ===== PAST EFFECTS =====
 		CardDatabase.EffectType.HP_SWAP_FROM_PAST:
-			if past_tp and past_tp.entity_data_list.size() > 0:
+			var player_entity = null
+			for entity in present_tp.entity_data_list:
+				if entity.unique_id == GameState.player_unique_id:
+					player_entity = entity
+					break
+
+			if player_entity and past_tp and past_tp.entity_data_list.size() > 0:
 				var past_player = _get_player_entity_data(past_tp)
 				var present_player = _get_player_entity_data(present_tp)
 				if past_player and present_player:
@@ -255,7 +261,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
 			else:
-				print("No Past state available - card has no effect")
+				print("Cannot heal - player not in PRESENT timeline (possibly conscripted to PAST)")
 
 		CardDatabase.EffectType.SUMMON_PAST_TWIN:
 			if past_tp and past_tp.entity_data_list.size() > 0:
@@ -402,18 +408,6 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				Events.future_recalculation_requested.emit()
 
 		# ===== FUTURE EFFECTS =====
-		CardDatabase.EffectType.REDIRECT_FUTURE_ATTACK:
-			var enemies = _get_enemy_entities_data(present_tp)
-			if enemies.size() >= 2:
-				# Set first enemy to attack second enemy
-				enemies[0].attack_target_id = enemies[1].unique_id
-				print("Redirected ", enemies[0].entity_name, " to attack ", enemies[1].entity_name)
-				# Sync to backwards-compatible state
-				present_tp.state = present_tp.get_state_dict()
-				# DON'T recalculate targets - we just manually set the redirect!
-				# Request future recalculation to show redirect in FUTURE
-				Events.future_recalculation_requested.emit()
-
 		CardDatabase.EffectType.CHAOS_INJECTION:
 			var enemies = _get_enemy_entities_data(present_tp)
 			var enemy_count = enemies.size()
