@@ -259,15 +259,22 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 					# Create twin using EntityData
 					var twin = EntityData.create_twin(past_player)
-					# Position twin next to player (grid position)
+
+					# Find smart position for twin
 					var present_player = _get_player_entity_data(present_tp)
 					if present_player:
-						twin.grid_row = present_player.grid_row + 1  # Place below player
-						twin.grid_col = present_player.grid_col
+						var twin_pos = _find_smart_position_for_twin(present_tp, present_player)
+						twin.grid_row = twin_pos.x
+						twin.grid_col = twin_pos.y
 
 					# Add twin to Present panel
 					present_tp.entity_data_list.append(twin)
+					# Update cell_entities grid
+					if twin.grid_row >= 0 and twin.grid_col >= 0:
+						present_tp.cell_entities[twin.grid_row][twin.grid_col] = twin
+
 					print("  Twin stats: HP=", twin.hp, " DMG=", twin.damage)
+					print("  Twin positioned at (", twin.grid_row, ", ", twin.grid_col, ")")
 					print("  ✅ Past Twin summoned to fight alongside you!")
 
 					# Sync to backwards-compatible state
@@ -290,25 +297,52 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			var past_enemies = _get_enemy_entities_data(past_tp)
 			if past_enemies.size() > 0:
-				var conscripted_enemy = past_enemies[0]
-				print("🔄 Conscripting ", conscripted_enemy.entity_name)
+				var past_enemy = past_enemies[0]
+				print("🔄 Conscripting ", past_enemy.entity_name, " from PAST")
+
+				# Find the same enemy in PRESENT by unique_id
+				var present_enemy = null
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == past_enemy.unique_id and entity.is_enemy:
+						present_enemy = entity
+						break
+
+				if not present_enemy:
+					print("  ERROR: Could not find enemy in PRESENT timeline")
+					return
 
 				# Find player entity in PRESENT
 				var player_entity = _get_player_entity_data(present_tp)
 				if player_entity:
-					# Swap grid positions between player and conscripted enemy
+					# Store enemy's PAST position
+					var past_enemy_row = past_enemy.grid_row
+					var past_enemy_col = past_enemy.grid_col
+
+					# Swap grid positions between player and enemy in PRESENT
+					# But player goes to enemy's PAST position
 					var temp_row = player_entity.grid_row
 					var temp_col = player_entity.grid_col
-					player_entity.grid_row = conscripted_enemy.grid_row
-					player_entity.grid_col = conscripted_enemy.grid_col
-					conscripted_enemy.grid_row = temp_row
-					conscripted_enemy.grid_col = temp_col
+
+					# Move player to enemy's PAST position
+					player_entity.grid_row = past_enemy_row
+					player_entity.grid_col = past_enemy_col
+
+					# Update cell_entities grid
+					present_tp.cell_entities[temp_row][temp_col] = null
+					present_tp.cell_entities[player_entity.grid_row][player_entity.grid_col] = player_entity
+
+					# Move conscripted enemy to player's old position
+					present_tp.cell_entities[present_enemy.grid_row][present_enemy.grid_col] = null
+					present_enemy.grid_row = temp_row
+					present_enemy.grid_col = temp_col
+					present_tp.cell_entities[present_enemy.grid_row][present_enemy.grid_col] = present_enemy
 
 					# Change enemy to fight for player
-					conscripted_enemy.is_enemy = false
-					conscripted_enemy.is_conscripted = true
+					present_enemy.is_enemy = false
+					present_enemy.is_conscripted = true
 
-					print("  Swapped positions and conscripted ", conscripted_enemy.entity_name)
+					print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
+					print("  Conscripted ", present_enemy.entity_name, " at player's old position: (", present_enemy.grid_row, ", ", present_enemy.grid_col, ")")
 
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
@@ -316,14 +350,14 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
 
-					# Calculate REAL_FUTURE where player is back at enemy's position and conscripted enemy is removed
+					# Calculate REAL_FUTURE where player is back at enemy's PRESENT position and conscripted enemy is removed
 					var real_future_entities: Array[EntityData] = []
 					for entity in present_tp.entity_data_list:
 						var future_entity = entity.duplicate_entity()
-						# Move player back to conscripted enemy's position
+						# Move player back to conscripted enemy's current position (player's old position)
 						if not future_entity.is_enemy and not future_entity.is_twin and not future_entity.is_conscripted:
-							future_entity.grid_row = conscripted_enemy.grid_row
-							future_entity.grid_col = conscripted_enemy.grid_col
+							future_entity.grid_row = present_enemy.grid_row
+							future_entity.grid_col = present_enemy.grid_col
 							real_future_entities.append(future_entity)
 						# Skip conscripted enemy (doesn't exist in real future)
 						elif future_entity.is_conscripted:
@@ -332,7 +366,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 						else:
 							real_future_entities.append(future_entity)
 					GameState.set_real_future(real_future_entities)
-					print("  📍 REAL_FUTURE stored (player will return to enemy position after combat)")
+					print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
 
 					# Request future recalculation
 					Events.future_recalculation_requested.emit()
@@ -344,16 +378,24 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 			if past_enemies.size() > 0 and present_enemies.size() > 0:
 				var past_enemy = past_enemies[0]
 				var present_enemy = present_enemies[0]
-				# Calculate damage taken between Past and Present
-				var damage_taken = present_enemy.max_hp - present_enemy.hp - (past_enemy.max_hp - past_enemy.hp)
-				if damage_taken > 0:
-					var died = present_enemy.take_damage(damage_taken)
-					print("Transferred ", damage_taken, " wound damage")
+				# Calculate wounds (damage taken) in PAST and PRESENT
+				var past_wounds = past_enemy.max_hp - past_enemy.hp
+				var present_wounds = present_enemy.max_hp - present_enemy.hp
+				# Transfer the difference from PAST to PRESENT
+				var damage_to_transfer = past_wounds - present_wounds
+				if damage_to_transfer > 0:
+					var died = present_enemy.take_damage(damage_to_transfer)
+					print("Transferred ", damage_to_transfer, " wound damage from PAST (", past_wounds, " wounds) to PRESENT (", present_wounds, " wounds)")
 					if died:
 						present_tp.entity_data_list.erase(present_enemy)
+						# Clear from grid
+						if present_enemy.grid_row >= 0 and present_enemy.grid_col >= 0:
+							present_tp.cell_entities[present_enemy.grid_row][present_enemy.grid_col] = null
 					else:
 						# Update visual display for damaged enemy
 						_update_entity_visuals(present_tp, present_enemy)
+				else:
+					print("No wounds to transfer (PAST: ", past_wounds, " wounds, PRESENT: ", present_wounds, " wounds)")
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 				# Recalculate future since enemy HP changed
@@ -368,6 +410,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				print("Redirected ", enemies[0].entity_name, " to attack ", enemies[1].entity_name)
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
+				# Recalculate targets in PRESENT to update arrows
+				TargetCalculator.calculate_targets(present_tp)
 				# Request future recalculation to apply redirect in FUTURE
 				Events.future_recalculation_requested.emit()
 
@@ -380,13 +424,29 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				var shuffled_enemies = enemies.duplicate()
 				shuffled_enemies.shuffle()
 
+				# Track which enemies will miss
+				var missing_enemy_ids = []
+
 				# Set will_miss on random enemies
 				for i in range(num_to_miss):
 					shuffled_enemies[i].will_miss = true
-					print("Chaos Injection: ", shuffled_enemies[i].entity_name, " will miss")
+					missing_enemy_ids.append(shuffled_enemies[i].unique_id)
+					print("Chaos Injection: ", shuffled_enemies[i].entity_name, " will miss next turn")
 
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
+
+				# Calculate REAL_FUTURE where will_miss is cleared (miss only one turn)
+				var real_future_entities: Array[EntityData] = []
+				for entity in present_tp.entity_data_list:
+					var future_entity = entity.duplicate_entity()
+					# Clear will_miss for entities that were affected by chaos injection
+					if entity.unique_id in missing_enemy_ids:
+						future_entity.will_miss = false
+					real_future_entities.append(future_entity)
+				GameState.set_real_future(real_future_entities)
+				print("  📍 REAL_FUTURE stored (enemies will only miss one turn)")
+
 				# Request future recalculation to apply miss flags in FUTURE
 				Events.future_recalculation_requested.emit()
 
@@ -486,15 +546,25 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 				var source_enemy_id = targets[0].entity_data.get("unique_id", "")
 				var target_enemy_id = targets[1].entity_data.get("unique_id", "")
 
+				# Find target entity name for logging
+				var target_name = ""
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == target_enemy_id:
+						target_name = entity.entity_name
+						break
+
 				# Set attack_target_id in PRESENT
 				for entity in present_tp.entity_data_list:
 					if entity.unique_id == source_enemy_id and entity.is_enemy:
 						entity.attack_target_id = target_enemy_id
-						print("Redirected ", entity.entity_name, " to attack enemy with ID ", target_enemy_id)
+						print("Redirected ", entity.entity_name, " to attack ", target_name)
 						break
 
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
+
+				# Recalculate targets in PRESENT to update arrows
+				TargetCalculator.calculate_targets(present_tp)
 
 				# Request future recalculation to apply redirect in FUTURE
 				Events.future_recalculation_requested.emit()
@@ -519,19 +589,25 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						break
 
 				if past_entity and present_entity:
-					# Calculate damage taken between Past and Present
-					var damage_taken = (past_entity.max_hp - past_entity.hp) - (present_entity.max_hp - present_entity.hp)
-					if damage_taken > 0:
-						var died = present_entity.take_damage(damage_taken)
-						print("Transferred ", damage_taken, " wound damage to ", present_entity.entity_name)
+					# Calculate wounds (damage taken) in PAST and PRESENT
+					var past_wounds = past_entity.max_hp - past_entity.hp
+					var present_wounds = present_entity.max_hp - present_entity.hp
+					# Transfer the difference from PAST to PRESENT
+					var damage_to_transfer = past_wounds - present_wounds
+					if damage_to_transfer > 0:
+						var died = present_entity.take_damage(damage_to_transfer)
+						print("Transferred ", damage_to_transfer, " wound damage to ", present_entity.entity_name, " (PAST: ", past_wounds, " wounds, PRESENT: ", present_wounds, " wounds)")
 
 						# Emit damage event for visual feedback
 						var present_visual = _find_entity_by_unique_id_visual(present_tp, target_unique_id)
 						if present_visual:
-							Events.damage_dealt.emit(present_visual, damage_taken)
+							Events.damage_dealt.emit(present_visual, damage_to_transfer)
 
 						if died:
 							present_tp.entity_data_list.erase(present_entity)
+							# Clear from grid
+							if present_entity.grid_row >= 0 and present_entity.grid_col >= 0:
+								present_tp.cell_entities[present_entity.grid_row][present_entity.grid_col] = null
 						else:
 							# Update visual display for living enemies
 							_update_entity_visuals(present_tp, present_entity)
@@ -539,39 +615,68 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						present_tp.state = present_tp.get_state_dict()
 						# Recalculate future since enemy HP changed
 						Events.future_recalculation_requested.emit()
+					else:
+						print("No wounds to transfer to ", present_entity.entity_name, " (PAST: ", past_wounds, " wounds, PRESENT: ", present_wounds, " wounds)")
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			if targets.size() > 0 and past_tp and past_tp.entity_data_list.size() > 0:
 				var target_visual = targets[0]
 				var target_unique_id = target_visual.entity_data.get("unique_id", "")
 
-				# Find the conscripted enemy in PRESENT by unique_id
-				var conscripted_enemy = null
-				for entity in present_tp.entity_data_list:
+				# Find the enemy in PAST by unique_id
+				var past_enemy = null
+				for entity in past_tp.entity_data_list:
 					if entity.unique_id == target_unique_id and entity.is_enemy:
-						conscripted_enemy = entity
+						past_enemy = entity
 						break
 
-				if conscripted_enemy:
-					print("🔄 Conscripting ", conscripted_enemy.entity_name)
+				if not past_enemy:
+					print("  ERROR: Could not find enemy in PAST timeline")
+					return
+
+				# Find the same enemy in PRESENT by unique_id
+				var present_enemy = null
+				for entity in present_tp.entity_data_list:
+					if entity.unique_id == target_unique_id and entity.is_enemy:
+						present_enemy = entity
+						break
+
+				if present_enemy:
+					print("🔄 Conscripting ", present_enemy.entity_name, " from PAST")
 
 					# Find player entity in PRESENT
 					var player_entity = _get_player_entity_data(present_tp)
 					if player_entity:
-						# Swap grid positions between player and conscripted enemy
+						# Store enemy's PAST position
+						var past_enemy_row = past_enemy.grid_row
+						var past_enemy_col = past_enemy.grid_col
+
+						# Swap grid positions between player and enemy in PRESENT
+						# But player goes to enemy's PAST position
 						var temp_row = player_entity.grid_row
 						var temp_col = player_entity.grid_col
-						player_entity.grid_row = conscripted_enemy.grid_row
-						player_entity.grid_col = conscripted_enemy.grid_col
-						conscripted_enemy.grid_row = temp_row
-						conscripted_enemy.grid_col = temp_col
+
+						# Move player to enemy's PAST position
+						player_entity.grid_row = past_enemy_row
+						player_entity.grid_col = past_enemy_col
+
+						# Update cell_entities grid
+						present_tp.cell_entities[temp_row][temp_col] = null
+						present_tp.cell_entities[player_entity.grid_row][player_entity.grid_col] = player_entity
+
+						# Move conscripted enemy to player's old position
+						present_tp.cell_entities[present_enemy.grid_row][present_enemy.grid_col] = null
+						present_enemy.grid_row = temp_row
+						present_enemy.grid_col = temp_col
+						present_tp.cell_entities[present_enemy.grid_row][present_enemy.grid_col] = present_enemy
 
 						# Change enemy to fight for player
-						conscripted_enemy.is_enemy = false
-						conscripted_enemy.is_conscripted = true
+						present_enemy.is_enemy = false
+						present_enemy.is_conscripted = true
 
-						print("  Swapped positions: Player at (", player_entity.grid_row, ",", player_entity.grid_col, "), Conscripted at (", conscripted_enemy.grid_row, ",", conscripted_enemy.grid_col, ")")
-						print("  ", conscripted_enemy.entity_name, " now fights for you!")
+						print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
+						print("  Conscripted ", present_enemy.entity_name, " at player's old position: (", present_enemy.grid_row, ", ", present_enemy.grid_col, ")")
+						print("  ", present_enemy.entity_name, " now fights for you!")
 
 						# Sync to backwards-compatible state
 						present_tp.state = present_tp.get_state_dict()
@@ -579,14 +684,14 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						# Recalculate targets so conscripted enemy attacks enemies
 						TargetCalculator.calculate_targets(present_tp)
 
-						# Calculate REAL_FUTURE where player is back at enemy's position and conscripted enemy is removed
+						# Calculate REAL_FUTURE where player is back at enemy's PRESENT position and conscripted enemy is removed
 						var real_future_entities: Array[EntityData] = []
 						for entity in present_tp.entity_data_list:
 							var future_entity = entity.duplicate_entity()
-							# Move player back to conscripted enemy's position
+							# Move player back to conscripted enemy's current position (player's old position)
 							if not future_entity.is_enemy and not future_entity.is_twin and not future_entity.is_conscripted:
-								future_entity.grid_row = conscripted_enemy.grid_row
-								future_entity.grid_col = conscripted_enemy.grid_col
+								future_entity.grid_row = present_enemy.grid_row
+								future_entity.grid_col = present_enemy.grid_col
 								real_future_entities.append(future_entity)
 							# Skip conscripted enemy (doesn't exist in real future)
 							elif future_entity.is_conscripted:
@@ -595,7 +700,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 							else:
 								real_future_entities.append(future_entity)
 						GameState.set_real_future(real_future_entities)
-						print("  📍 REAL_FUTURE stored (player will return to enemy position after combat)")
+						print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
 
 						# Request future recalculation to show conscripted future
 						Events.future_recalculation_requested.emit()
@@ -849,3 +954,76 @@ func _update_entity_visuals(panel, entity_data: EntityData):
 		if visual_node.has_method("update_display"):
 			visual_node.update_display()
 			print("  🔄 Updated visual display for ", entity_data.entity_name)
+
+
+## Find smart position for summoned twin
+func _find_smart_position_for_twin(panel, player: EntityData) -> Vector2i:
+	"""
+	Find the best position for a summoned twin:
+	1. Find the furthest ally from player's team (not enemy)
+	2. Try to place on same row as that ally
+	3. Prefer left cell, otherwise right (but not back)
+	"""
+	# Get all allies (non-enemy entities)
+	var allies = []
+	for entity in panel.entity_data_list:
+		if not entity.is_enemy:
+			allies.append(entity)
+
+	# Find furthest ally from player
+	var furthest_ally = null
+	var max_distance = -1.0
+	for ally in allies:
+		var distance = sqrt(pow(ally.grid_row - player.grid_row, 2) + pow(ally.grid_col - player.grid_col, 2))
+		if distance > max_distance:
+			max_distance = distance
+			furthest_ally = ally
+
+	# If no allies found, use player position
+	var target_row = player.grid_row
+	if furthest_ally:
+		target_row = furthest_ally.grid_row
+
+	# Try to find empty cell on same row
+	# Priority: left of furthest ally, then right
+	var positions_to_try = []
+
+	# Left cells (col 0 to furthest_ally.col - 1)
+	if furthest_ally:
+		for col in range(furthest_ally.grid_col - 1, -1, -1):
+			positions_to_try.append(Vector2i(target_row, col))
+		# Right cells (col furthest_ally.col + 1 to end)
+		for col in range(furthest_ally.grid_col + 1, panel.GRID_COLS):
+			positions_to_try.append(Vector2i(target_row, col))
+	else:
+		# If no furthest ally, try around player
+		for col in range(player.grid_col - 1, -1, -1):
+			positions_to_try.append(Vector2i(target_row, col))
+		for col in range(player.grid_col + 1, panel.GRID_COLS):
+			positions_to_try.append(Vector2i(target_row, col))
+
+	# Try positions in order
+	for pos in positions_to_try:
+		if pos.x >= 0 and pos.x < panel.GRID_ROWS and pos.y >= 0 and pos.y < panel.GRID_COLS:
+			if panel.cell_entities[pos.x][pos.y] == null:
+				return pos
+
+	# If same row is full, try next row
+	for row_offset in [1, -1, 2, -2]:
+		var new_row = target_row + row_offset
+		if new_row < 0 or new_row >= panel.GRID_ROWS:
+			continue
+
+		# Try left cells first, then right
+		for col in range(panel.GRID_COLS):
+			if panel.cell_entities[new_row][col] == null:
+				return Vector2i(new_row, col)
+
+	# Fallback: find any empty cell
+	for row in range(panel.GRID_ROWS):
+		for col in range(panel.GRID_COLS):
+			if panel.cell_entities[row][col] == null:
+				return Vector2i(row, col)
+
+	# No empty cells found - return player position (will fail, but at least we tried)
+	return Vector2i(player.grid_row, player.grid_col)
