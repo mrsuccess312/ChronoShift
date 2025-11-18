@@ -410,9 +410,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				print("Redirected ", enemies[0].entity_name, " to attack ", enemies[1].entity_name)
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
-				# Recalculate targets in PRESENT to update arrows
-				TargetCalculator.calculate_targets(present_tp)
-				# Request future recalculation to apply redirect in FUTURE
+				# DON'T recalculate targets - we just manually set the redirect!
+				# Request future recalculation to show redirect in FUTURE
 				Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.CHAOS_INJECTION:
@@ -562,10 +561,8 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
-				# Recalculate targets in PRESENT to update arrows
-				TargetCalculator.calculate_targets(present_tp)
-
-				# Request future recalculation to apply redirect in FUTURE
+				# DON'T recalculate targets - we just manually set the redirect!
+				# Request future recalculation to show redirect in FUTURE
 				Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
