@@ -322,6 +322,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 					# Update PRESENT grid - only conscripted enemy at player's old position
 					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
+					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
 					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
@@ -647,6 +648,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 
 					# Update PRESENT grid - only conscripted enemy at player's old position
 					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
+					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
 					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
