@@ -303,58 +303,71 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				# Find player entity in PRESENT
 				var player_entity = _get_player_entity_data(present_tp)
 				if player_entity:
-					# Store positions
+					# 1. Store positions
 					var player_row = player_entity.grid_row
 					var player_col = player_entity.grid_col
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
-					# Duplicate the enemy for PRESENT (don't modify the original in PAST!)
+					# 2. Duplicate the enemy for PRESENT (don't modify the original in PAST!)
 					var conscripted_enemy = past_enemy.duplicate_entity()
 					conscripted_enemy.grid_row = player_row
 					conscripted_enemy.grid_col = player_col
 					conscripted_enemy.is_enemy = false
 					conscripted_enemy.is_conscripted = true
 
-					# Move player to enemy's PAST position (coordinates only, for combat logic)
+					# 3. Update player position to enemy's PAST position
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
-					# Update PRESENT grid - only conscripted enemy at player's old position
-					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
-					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
-					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
+					# 4. Remove player entity from PRESENT entity_data_list
+					present_tp.entity_data_list.erase(player_entity)
 
-					# Add conscripted enemy to PRESENT entity list
+					# 5. Remove enemy entity from PAST entity_data_list
+					past_tp.entity_data_list.erase(past_enemy)
+
+					# 6. Add conscripted enemy to PRESENT entity_data_list
 					present_tp.entity_data_list.append(conscripted_enemy)
 
-					# Update PAST grid to show player at enemy's old position (enemy stays in PAST too)
+					# 7. Add player to PAST entity_data_list
+					past_tp.entity_data_list.append(player_entity)
+
+					# 8. Update PRESENT grid - only conscripted enemy at player's old position
+					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
+					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
+
+					# 9. Update PAST grid - player at enemy's old position, enemy cell is now empty
 					past_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
 
-					print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
-					print("  Conscripted ", conscripted_enemy.entity_name, " at player's old position: (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
+					print("  ✅ Player removed from PRESENT, added to PAST at (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
+					print("  ✅ Enemy removed from PAST, conscripted copy added to PRESENT at (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
+					print("  ", conscripted_enemy.entity_name, " now fights for you!")
 
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
+					past_tp.state = past_tp.get_state_dict()
 
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
 
 					# Calculate REAL_FUTURE where player is back at original position and conscripted enemy is removed
 					var real_future_entities: Array[EntityData] = []
+
+					# Add player back to REAL_FUTURE at original position
+					var future_player = player_entity.duplicate_entity()
+					future_player.grid_row = player_row
+					future_player.grid_col = player_col
+					real_future_entities.append(future_player)
+
+					# Add all other PRESENT entities except the conscripted enemy
 					for entity in present_tp.entity_data_list:
-						var future_entity = entity.duplicate_entity()
-						# Move player back to original position
-						if not future_entity.is_enemy and not future_entity.is_twin and not future_entity.is_conscripted:
-							future_entity.grid_row = player_row
-							future_entity.grid_col = player_col
-							real_future_entities.append(future_entity)
 						# Skip conscripted enemy (doesn't exist in real future)
-						elif future_entity.is_conscripted:
+						if entity.is_conscripted:
 							continue
-						# Keep other entities
-						else:
-							real_future_entities.append(future_entity)
+						# Keep other entities (other enemies, etc.)
+						var future_entity = entity.duplicate_entity()
+						real_future_entities.append(future_entity)
+
 					GameState.set_real_future(real_future_entities)
 					print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
 
@@ -629,59 +642,71 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 				# Find player entity in PRESENT
 				var player_entity = _get_player_entity_data(present_tp)
 				if player_entity:
-					# Store positions
+					# 1. Store positions
 					var player_row = player_entity.grid_row
 					var player_col = player_entity.grid_col
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
-					# Duplicate the enemy for PRESENT (don't modify the original in PAST!)
+					# 2. Duplicate the enemy for PRESENT (don't modify the original in PAST!)
 					var conscripted_enemy = past_enemy.duplicate_entity()
 					conscripted_enemy.grid_row = player_row
 					conscripted_enemy.grid_col = player_col
 					conscripted_enemy.is_enemy = false
 					conscripted_enemy.is_conscripted = true
 
-					# Move player to enemy's PAST position (coordinates only, for combat logic)
+					# 3. Update player position to enemy's PAST position
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
-					# Update PRESENT grid - only conscripted enemy at player's old position
-					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
-					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
-					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
+					# 4. Remove player entity from PRESENT entity_data_list
+					present_tp.entity_data_list.erase(player_entity)
 
-					# Add conscripted enemy to PRESENT entity list
+					# 5. Remove enemy entity from PAST entity_data_list
+					past_tp.entity_data_list.erase(past_enemy)
+
+					# 6. Add conscripted enemy to PRESENT entity_data_list
 					present_tp.entity_data_list.append(conscripted_enemy)
 
-					# Update PAST grid to show player at enemy's old position (enemy stays in PAST too)
+					# 7. Add player to PAST entity_data_list
+					past_tp.entity_data_list.append(player_entity)
+
+					# 8. Update PRESENT grid - only conscripted enemy at player's old position
+					present_tp.cell_entities[player_row][player_col] = conscripted_enemy
+					present_tp.cell_entities[past_enemy_row][past_enemy_col] = null
+
+					# 9. Update PAST grid - player at enemy's old position, enemy cell is now empty
 					past_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
 
-					print("  Player moved to enemy's PAST position: (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
-					print("  Conscripted ", conscripted_enemy.entity_name, " at player's old position: (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
+					print("  ✅ Player removed from PRESENT, added to PAST at (", player_entity.grid_row, ", ", player_entity.grid_col, ")")
+					print("  ✅ Enemy removed from PAST, conscripted copy added to PRESENT at (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
 					print("  ", conscripted_enemy.entity_name, " now fights for you!")
 
 					# Sync to backwards-compatible state
 					present_tp.state = present_tp.get_state_dict()
+					past_tp.state = past_tp.get_state_dict()
 
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
 
 					# Calculate REAL_FUTURE where player is back at original position and conscripted enemy is removed
 					var real_future_entities: Array[EntityData] = []
+
+					# Add player back to REAL_FUTURE at original position
+					var future_player = player_entity.duplicate_entity()
+					future_player.grid_row = player_row
+					future_player.grid_col = player_col
+					real_future_entities.append(future_player)
+
+					# Add all other PRESENT entities except the conscripted enemy
 					for entity in present_tp.entity_data_list:
-						var future_entity = entity.duplicate_entity()
-						# Move player back to original position
-						if not future_entity.is_enemy and not future_entity.is_twin and not future_entity.is_conscripted:
-							future_entity.grid_row = player_row
-							future_entity.grid_col = player_col
-							real_future_entities.append(future_entity)
 						# Skip conscripted enemy (doesn't exist in real future)
-						elif future_entity.is_conscripted:
+						if entity.is_conscripted:
 							continue
-						# Keep other entities
-						else:
-							real_future_entities.append(future_entity)
+						# Keep other entities (other enemies, etc.)
+						var future_entity = entity.duplicate_entity()
+						real_future_entities.append(future_entity)
+
 					GameState.set_real_future(real_future_entities)
 					print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
 
