@@ -150,20 +150,23 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 	match effect_type:
 		# ===== PRESENT EFFECTS =====
 		CardDatabase.EffectType.HEAL_PLAYER:
-			# Find player by unique_id (works even if player is in PAST/FUTURE)
-			var player_result = _get_player_by_id()
-			var player_entity = player_result[0]
-			var player_panel = player_result[1]
-			if player_entity and player_panel:
+			# Only heal if real player is in PRESENT timeline
+			var player_entity = null
+			for entity in present_tp.entity_data_list:
+				if entity.unique_id == GameState.player_unique_id:
+					player_entity = entity
+					break
+
+			if player_entity:
 				player_entity.heal(effect_value)
-				print("Healed ", effect_value, " HP (player in ", player_panel.timeline_type, " timeline)")
+				print("Healed ", effect_value, " HP")
 				Events.hp_updated.emit(null, player_entity.hp)
-				# Update visual display in the panel where player actually is
-				_update_entity_visuals(player_panel, player_entity)
-				# Sync to backwards-compatible state for that panel
-				player_panel.state = player_panel.get_state_dict()
+				# Update visual display
+				_update_entity_visuals(present_tp, player_entity)
+				# Sync to backwards-compatible state
+				present_tp.state = present_tp.get_state_dict()
 			else:
-				print("WARNING: Could not find player to heal (player_unique_id: ", GameState.player_unique_id, ")")
+				print("Cannot heal - player not in PRESENT timeline (possibly conscripted to PAST)")
 
 		CardDatabase.EffectType.DAMAGE_ENEMY:
 			var enemies = _get_enemy_entities_data(present_tp)
