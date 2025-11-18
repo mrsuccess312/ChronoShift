@@ -256,19 +256,22 @@ func should_apply_real_future() -> bool:
 ## Initialize REAL_FUTURE from source panel if not already initialized
 ## This allows multiple cards to cumulatively update REAL_FUTURE
 func ensure_real_future_initialized(source_panel) -> void:
-	"""Initialize REAL_FUTURE from PRESENT panel if it doesn't exist yet.
+	"""Initialize REAL_FUTURE from FUTURE panel if it doesn't exist yet.
 	This allows multiple cards played in the same turn to all contribute to REAL_FUTURE.
 	If REAL_FUTURE already exists, does nothing (cards will modify existing REAL_FUTURE).
+	Only copies living entities - dead entities are excluded from REAL_FUTURE.
 	"""
 	if has_real_future:
 		return  # Already initialized by previous card
 
-	# Initialize from source panel (typically PRESENT)
+	# Initialize from source panel (typically FUTURE), excluding dead entities
 	if source_panel and is_instance_valid(source_panel):
 		for entity in source_panel.entity_data_list:
-			real_future_entities.append(entity.duplicate_entity())
+			# Only copy living entities to REAL_FUTURE
+			if entity.is_alive():
+				real_future_entities.append(entity.duplicate_entity())
 		has_real_future = true
-		print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " entities)")
+		print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " living entities)")
 
 
 ## Modify a specific entity in REAL_FUTURE by unique_id
