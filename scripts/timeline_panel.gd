@@ -455,7 +455,11 @@ func get_state_dict() -> Dictionary:
 			"name": player.entity_name,
 			"hp": player.hp,
 			"max_hp": player.max_hp,
-			"damage": player.damage
+			"damage": player.damage,
+			"unique_id": player.unique_id,
+			"is_twin": player.is_twin,
+			"is_conscripted": player.is_conscripted,
+			"is_conscripted_enemy": player.is_conscripted  # Backwards compatibility for visual nodes
 		}
 
 	state["enemies"] = []
@@ -464,7 +468,11 @@ func get_state_dict() -> Dictionary:
 			"name": enemy.entity_name,
 			"hp": enemy.hp,
 			"max_hp": enemy.max_hp,
-			"damage": enemy.damage
+			"damage": enemy.damage,
+			"unique_id": enemy.unique_id,
+			"is_twin": enemy.is_twin,
+			"is_conscripted": enemy.is_conscripted,
+			"is_conscripted_enemy": enemy.is_conscripted  # Backwards compatibility for visual nodes
 		})
 
 	return state
