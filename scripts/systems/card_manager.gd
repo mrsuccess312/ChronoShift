@@ -476,6 +476,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 ## Apply targeted card effects
 func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
+	var future_tp = _get_timeline_panel("future")
 	var present_tp = _get_timeline_panel("present")
 	var past_tp = _get_timeline_panel("past")
 	var effect_type = card_data.get("effect_type")
@@ -588,7 +589,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					var past_wounds = past_entity.max_hp - past_entity.hp
 					var present_wounds = present_entity.max_hp - present_entity.hp
 					# Transfer the difference from PAST to PRESENT
-					var damage_to_transfer = past_wounds - present_wounds
+					var damage_to_transfer = present_wounds - past_wounds
 					if damage_to_transfer > 0:
 						var died = present_entity.take_damage(damage_to_transfer)
 						print("Transferred ", damage_to_transfer, " wound damage to ", present_entity.entity_name, " (PAST: ", past_wounds, " wounds, PRESENT: ", present_wounds, " wounds)")
@@ -692,6 +693,15 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					future_player.grid_row = player_row
 					future_player.grid_col = player_col
 					GameState.add_to_real_future(future_player)
+
+					for entity in future_tp.entity_data_list:
+						# Skip conscripted enemy (doesn't exist in real future)
+						if entity.is_conscripted:
+							continue
+						# Keep other entities (other enemies, etc.)
+						var future_entity = entity.duplicate_entity()
+						GameState.add_to_real_future(future_entity)
+
 					print("  📍 REAL_FUTURE updated (player will return, conscripted enemy removed)")
 
 					# Request future recalculation to show conscripted future
