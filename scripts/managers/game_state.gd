@@ -252,6 +252,54 @@ func clear_real_future() -> void:
 func should_apply_real_future() -> bool:
 	return has_real_future
 
+
+## Initialize REAL_FUTURE from source panel if not already initialized
+## This allows multiple cards to cumulatively update REAL_FUTURE
+func ensure_real_future_initialized(source_panel) -> void:
+	"""Initialize REAL_FUTURE from PRESENT panel if it doesn't exist yet.
+	This allows multiple cards played in the same turn to all contribute to REAL_FUTURE.
+	If REAL_FUTURE already exists, does nothing (cards will modify existing REAL_FUTURE).
+	"""
+	if has_real_future:
+		return  # Already initialized by previous card
+
+	# Initialize from source panel (typically PRESENT)
+	if source_panel and is_instance_valid(source_panel):
+		for entity in source_panel.entity_data_list:
+			real_future_entities.append(entity.duplicate_entity())
+		has_real_future = true
+		print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " entities)")
+
+
+## Modify a specific entity in REAL_FUTURE by unique_id
+func modify_real_future_entity(unique_id: String, modifier_func: Callable) -> bool:
+	"""Find entity in REAL_FUTURE by unique_id and apply modifier function.
+	Returns true if entity was found and modified, false otherwise.
+	"""
+	for entity in real_future_entities:
+		if entity.unique_id == unique_id:
+			modifier_func.call(entity)
+			return true
+	return false
+
+
+## Remove entity from REAL_FUTURE by unique_id
+func remove_from_real_future(unique_id: String) -> bool:
+	"""Remove entity from REAL_FUTURE by unique_id.
+	Returns true if entity was found and removed, false otherwise.
+	"""
+	for i in range(real_future_entities.size() - 1, -1, -1):
+		if real_future_entities[i].unique_id == unique_id:
+			real_future_entities.remove_at(i)
+			return true
+	return false
+
+
+## Add entity to REAL_FUTURE
+func add_to_real_future(entity: EntityData) -> void:
+	"""Add a new entity to REAL_FUTURE (e.g., restoring removed entities)"""
+	real_future_entities.append(entity.duplicate_entity())
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
