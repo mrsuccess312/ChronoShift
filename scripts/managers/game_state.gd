@@ -258,20 +258,42 @@ func should_apply_real_future() -> bool:
 func ensure_real_future_initialized(source_panel) -> void:
 	"""Initialize REAL_FUTURE from FUTURE panel if it doesn't exist yet.
 	This allows multiple cards played in the same turn to all contribute to REAL_FUTURE.
-	If REAL_FUTURE already exists, does nothing (cards will modify existing REAL_FUTURE).
+	If REAL_FUTURE already exists, updates entity stats from new FUTURE (HP, position, targets)
+	while preserving card modifications (damage, will_miss).
 	Only copies living entities - dead entities are excluded from REAL_FUTURE.
 	"""
+	if not source_panel or not is_instance_valid(source_panel):
+		return
+
 	if has_real_future:
-		return  # Already initialized by previous card
+		# REAL_FUTURE already initialized by previous card
+		# Update entity stats from newly recalculated FUTURE while preserving modifications
+		print("📍 REAL_FUTURE updating entity stats from recalculated FUTURE...")
+
+		for real_entity in real_future_entities:
+			# Find corresponding entity in new FUTURE by unique_id
+			for future_entity in source_panel.entity_data_list:
+				if future_entity.unique_id == real_entity.unique_id:
+					# Update simulation state (HP, position, targets)
+					real_entity.hp = future_entity.hp
+					real_entity.max_hp = future_entity.max_hp
+					real_entity.grid_row = future_entity.grid_row
+					real_entity.grid_col = future_entity.grid_col
+					real_entity.attack_target_id = future_entity.attack_target_id
+					# DON'T update: damage (BOOST_DAMAGE modifications)
+					# DON'T update: will_miss (CHAOS_INJECTION modifications)
+					break
+
+		print("  ✅ REAL_FUTURE entity stats updated")
+		return  # Already initialized, just updated
 
 	# Initialize from source panel (typically FUTURE), excluding dead entities
-	if source_panel and is_instance_valid(source_panel):
-		for entity in source_panel.entity_data_list:
-			# Only copy living entities to REAL_FUTURE
-			if entity.is_alive():
-				real_future_entities.append(entity.duplicate_entity())
-		has_real_future = true
-		print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " living entities)")
+	for entity in source_panel.entity_data_list:
+		# Only copy living entities to REAL_FUTURE
+		if entity.is_alive():
+			real_future_entities.append(entity.duplicate_entity())
+	has_real_future = true
+	print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " living entities)")
 
 
 ## Modify a specific entity in REAL_FUTURE by unique_id
