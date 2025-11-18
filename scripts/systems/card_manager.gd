@@ -361,17 +361,12 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					future_player.grid_col = player_col
 					real_future_entities.append(future_player)
 
-					# Add all other PRESENT entities except the conscripted enemy
-					for entity in present_tp.entity_data_list:
-						# Skip conscripted enemy (doesn't exist in real future)
-						if entity.is_conscripted:
-							continue
-						# Keep other entities (other enemies, etc.)
-						var future_entity = entity.duplicate_entity()
-						real_future_entities.append(future_entity)
+					# DON'T add enemies to REAL_FUTURE - this would overwrite post-combat HP values
+					# The conscripted enemy will be removed automatically (not in REAL_FUTURE)
+					# Regular enemies will keep their post-combat HP values
 
 					GameState.set_real_future(real_future_entities)
-					print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
+					print("  📍 REAL_FUTURE stored (player will return, conscripted enemy removed, enemy HP preserved)")
 
 					# Request future recalculation
 					Events.future_recalculation_requested.emit()
@@ -702,17 +697,12 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					future_player.grid_col = player_col
 					real_future_entities.append(future_player)
 
-					# Add all other PRESENT entities except the conscripted enemy
-					for entity in present_tp.entity_data_list:
-						# Skip conscripted enemy (doesn't exist in real future)
-						if entity.is_conscripted:
-							continue
-						# Keep other entities (other enemies, etc.)
-						var future_entity = entity.duplicate_entity()
-						real_future_entities.append(future_entity)
+					# DON'T add enemies to REAL_FUTURE - this would overwrite post-combat HP values
+					# The conscripted enemy will be removed automatically (not in REAL_FUTURE)
+					# Regular enemies will keep their post-combat HP values
 
 					GameState.set_real_future(real_future_entities)
-					print("  📍 REAL_FUTURE stored (player will return to original position after combat)")
+					print("  📍 REAL_FUTURE stored (player will return, conscripted enemy removed, enemy HP preserved)")
 
 					# Request future recalculation to show conscripted future
 					Events.future_recalculation_requested.emit()
