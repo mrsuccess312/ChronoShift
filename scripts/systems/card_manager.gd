@@ -311,6 +311,8 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 					# 2. Duplicate the enemy for PRESENT (don't modify the original in PAST!)
 					var conscripted_enemy = past_enemy.duplicate_entity()
+					# Generate new unique_id to avoid conflicts with original enemy
+					conscripted_enemy.unique_id = EntityData._generate_uuid()
 					conscripted_enemy.grid_row = player_row
 					conscripted_enemy.grid_col = player_col
 					conscripted_enemy.is_enemy = false
@@ -650,6 +652,8 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 
 					# 2. Duplicate the enemy for PRESENT (don't modify the original in PAST!)
 					var conscripted_enemy = past_enemy.duplicate_entity()
+					# Generate new unique_id to avoid conflicts with original enemy
+					conscripted_enemy.unique_id = EntityData._generate_uuid()
 					conscripted_enemy.grid_row = player_row
 					conscripted_enemy.grid_col = player_col
 					conscripted_enemy.is_enemy = false
