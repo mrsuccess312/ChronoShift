@@ -11,6 +11,10 @@ var end_pos = Vector2.ZERO
 var curve_height = 50.0  # How much the arrow curves
 var is_hovered = false
 
+# Entity tracking (NEW)
+var source_entity_id: String = ""  # UUID of attacking entity
+var target_entity_id: String = ""  # UUID of target entity
+
 # Visual state
 var default_alpha = 0.3  # Faded by default
 var hover_alpha = 1.0    # Fully visible on hover
@@ -18,20 +22,23 @@ var hover_alpha = 1.0    # Fully visible on hover
 # Entity offset distance (how far from entity center to start/end arrow)
 var entity_offset = 100.0  # Entities are 72x72, so 36 radius + 9 pixels gap
 
-func setup(from: Vector2, to: Vector2, curve: float = 50.0):
-	"""Initialize arrow from start to end position"""
+func setup(from: Vector2, to: Vector2, curve: float = 50.0, source_id: String = "", target_id: String = ""):
+	"""Initialize arrow with entity IDs"""
+	source_entity_id = source_id
+	target_entity_id = target_id
+
 	# Calculate direction from start to end
 	var direction = (to - from).normalized()
-	
+
 	# Offset start and end positions to be near entities, not at center
 	start_pos = from + direction * entity_offset
 	end_pos = to - direction * entity_offset
-	
+
 	curve_height = curve
-	
+
 	# Draw the arrow
 	draw_arrow()
-	
+
 	# Set default faded state
 	modulate = Color(1.0, 1.0, 1.0, default_alpha)
 

@@ -1,9 +1,9 @@
 extends Node
 class_name CombatResolver
 
-## CombatResolver - Handles all combat animations and damage resolution
-## Extracted from game_manager.gd to create a dedicated combat system
-## Uses Events for communication and GameState for data access
+## CombatResolver - Simplified target-based combat system
+## Uses EntityData models and attack_target_id for clean combat resolution
+## Replaces complex entity-finding logic with simple iteration
 
 # ============================================================================
 # REFERENCES (Set by GameController)
@@ -27,436 +27,207 @@ const ATTACK_OFFSET = 50.0
 ## Main entry point for combat resolution
 ## Orchestrates the full combat sequence on the Present panel
 func execute_combat(present_panel: Panel) -> void:
+	"""Main combat orchestrator - simplified target-based version"""
+	print("CombatResolver: Starting combat...")
 	Events.combat_started.emit()
 
-	# Check state
-	print("  Present state before combat:")
-	print("    Player HP: ", present_panel.state.get("player", {}).get("hp", 0))
-	print("    Enemies: ", present_panel.state.get("enemies", []).size())
+	# Get entity data list
+	var entities = present_panel.entity_data_list
 
-	if present_panel.state.get("enemies", []).size() == 0:
-		print("  No enemies - skipping combat")
+	if entities.size() == 0:
+		print("  No entities - ending combat")
 		Events.combat_ended.emit()
 		return
 
-	# Track if any enemy died during combat
-	var enemies_before = present_panel.state.get("enemies", []).size()
+	# Check if any enemies exist
+	var has_enemies = false
+	for entity in entities:
+		if entity.is_enemy and entity.is_alive():
+			has_enemies = true
+			break
 
-	# Twin attacks first (leftmost entity)
-	if present_panel.state.has("twin"):
-		print("  ⚔️ Twin attacking...")
-		await _animate_twin_attack(present_panel)
-		await get_tree().create_timer(0.2).timeout
+	if not has_enemies:
+		print("  No enemies - ending combat")
+		Events.combat_ended.emit()
+		return
 
-	# Player attacks
-	print("  ⚔️ Player attacking...")
-	await _animate_player_attack(present_panel)
+	# Phase 1: Player team attacks (is_enemy = false)
+	await _execute_team_attacks(present_panel, false)
 	await get_tree().create_timer(0.2).timeout
 
-	# Check if enemy died
-	var enemies_after_player = present_panel.state.get("enemies", []).size()
-	var enemy_died_during_player_attack = enemies_after_player < enemies_before
-
-	# Enemies attack (if any left)
-	if present_panel.state.get("enemies", []).size() > 0:
-		print("  ⚔️ Enemies attacking...")
-		await _animate_enemy_attacks(present_panel)
-
-	print("  ✅ Combat complete!")
-	print("    Player HP after: ", present_panel.state.get("player", {}).get("hp", 0))
-
-	# Reposition enemies if any died during combat
-	if enemy_died_during_player_attack:
-		print("  ↔️ Enemy died during combat - repositioning remaining enemies...")
-		await _animate_enemy_repositioning(present_panel)
+	# Phase 2: Enemy team attacks (is_enemy = true)
+	await _execute_team_attacks(present_panel, true)
 
 	Events.combat_ended.emit()
+	print("CombatResolver: Combat complete")
+
 
 # ============================================================================
-# PRIVATE COMBAT ANIMATIONS
+# SIMPLIFIED TEAM ATTACK LOGIC
 # ============================================================================
 
-## Animate player attacking leftmost enemy in Present
-func _animate_player_attack(present_panel: Panel) -> void:
-	# Find player and target enemy
-	var player_entity = _get_player_entity(present_panel)
-	var target_enemy = _get_target_enemy(present_panel)
+## Execute attacks for one team using target properties
+func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) -> void:
+	"""Execute attacks for one team using target properties"""
+	var team_name = "Enemy team" if attacking_team_is_enemy else "Player team"
+	print("  ⚔️ ", team_name, " attacking...")
 
-	if not player_entity or not target_enemy:
-		print("  Cannot animate - missing player or enemy")
+	# Get all attackers from this team
+	var attackers = []
+	for entity in present_panel.entity_data_list:
+		if entity.is_enemy == attacking_team_is_enemy and entity.is_alive():
+			attackers.append(entity)
+
+	if attackers.size() == 0:
+		print("    No attackers in ", team_name)
 		return
 
-	# Store original position
-	var original_pos = player_entity.position
-	var target_pos = target_enemy.position
-
-	# Calculate attack position
-	var direction = (target_pos - original_pos).normalized()
-	var attack_pos = target_pos - direction * ATTACK_OFFSET
-
-	print("  Player attack animation starting...")
-
-	# Dash to enemy
-	var tween = create_tween()
-	tween.tween_property(player_entity, "position", attack_pos, ATTACK_DASH_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await tween.finished
-
-	# APPLY DAMAGE AT IMPACT
-	if present_panel.state["enemies"].size() > 0:
-		var target_enemy_data = present_panel.state["enemies"][0]
-		var damage = present_panel.state["player"]["damage"]
-		target_enemy_data["hp"] -= damage
-		print("  Player dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
-
-		# Emit damage event
-		Events.damage_dealt.emit(target_enemy, damage)
-
-		# Play attack sound
-		player_entity.play_attack_sound()
-
-		# Screen shake via event
-		Events.screen_shake_requested.emit(damage * 0.5)
-
-		# Hit reaction
-		var hit_direction = (target_enemy.position - player_entity.position).normalized()
-		Events.hit_reaction_requested.emit(target_enemy, hit_direction)
-		target_enemy.play_hit_reaction(hit_direction)
-
-		# Update visual
-		target_enemy.entity_data = target_enemy_data
-		target_enemy.update_display()
-
-		# Remove enemy if dead
-		if target_enemy_data["hp"] <= 0:
-			print("  ", target_enemy_data["name"], " defeated!")
-			Events.entity_died.emit(target_enemy)
-			present_panel.state["enemies"].remove_at(0)
-			present_panel.entities.erase(target_enemy)
-			target_enemy.visible = false
-
-			# Queue for deletion (don't delete immediately - let combat finish)
-			get_tree().create_timer(1.5).timeout.connect(func():
-				if is_instance_valid(target_enemy):
-					target_enemy.queue_free()
-			)
-
-	# Pause at enemy
-	await get_tree().create_timer(ATTACK_PAUSE_TIME).timeout
-
-	# Dash back
-	var tween2 = create_tween()
-	tween2.tween_property(player_entity, "position", original_pos, RETREAT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await tween2.finished
-
-	print("  Player attack complete!")
-
-
-## Animate twin attacking leftmost enemy in Present
-func _animate_twin_attack(present_panel: Panel) -> void:
-	# Find twin and target enemy
-	var twin_entity = _get_twin_entity(present_panel)
-	var target_enemy = _get_target_enemy(present_panel)
-
-	if not twin_entity or not target_enemy:
-		print("  Cannot animate - missing twin or enemy")
-		return
-
-	# Store original position
-	var original_pos = twin_entity.position
-	var target_pos = target_enemy.position
-
-	# Calculate attack position
-	var direction = (target_pos - original_pos).normalized()
-	var attack_pos = target_pos - direction * ATTACK_OFFSET
-
-	print("  Twin attack animation starting...")
-
-	# Dash to enemy
-	var tween = create_tween()
-	tween.tween_property(twin_entity, "position", attack_pos, ATTACK_DASH_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await tween.finished
-
-	# APPLY DAMAGE AT IMPACT
-	if present_panel.state["enemies"].size() > 0 and present_panel.state.has("twin"):
-		var target_enemy_data = present_panel.state["enemies"][0]
-		var damage = present_panel.state["twin"]["damage"]
-		target_enemy_data["hp"] -= damage
-		print("  Twin dealt ", damage, " damage! Enemy HP: ", target_enemy_data["hp"])
-
-		# Emit damage event
-		Events.damage_dealt.emit(target_enemy, damage)
-
-		# Play attack sound
-		twin_entity.play_attack_sound()
-
-		# Screen shake via event
-		Events.screen_shake_requested.emit(damage * 0.5)
-
-		# Hit reaction
-		var hit_direction = (target_enemy.position - twin_entity.position).normalized()
-		Events.hit_reaction_requested.emit(target_enemy, hit_direction)
-		target_enemy.play_hit_reaction(hit_direction)
-
-		# Update visual
-		target_enemy.entity_data = target_enemy_data
-		target_enemy.update_display()
-
-		# Remove enemy if dead
-		if target_enemy_data["hp"] <= 0:
-			print("  ", target_enemy_data["name"], " defeated by twin!")
-			Events.entity_died.emit(target_enemy)
-			present_panel.state["enemies"].remove_at(0)
-			present_panel.entities.erase(target_enemy)
-			target_enemy.visible = false
-
-			# Queue for deletion
-			get_tree().create_timer(1.5).timeout.connect(func():
-				if is_instance_valid(target_enemy):
-					target_enemy.queue_free()
-			)
-
-	# Pause at enemy
-	await get_tree().create_timer(ATTACK_PAUSE_TIME).timeout
-
-	# Dash back
-	var tween2 = create_tween()
-	tween2.tween_property(twin_entity, "position", original_pos, RETREAT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-	await tween2.finished
-
-	print("  Twin attack complete!")
-
-
-## Animate all enemies attacking twin/player sequentially
-func _animate_enemy_attacks(present_panel: Panel) -> void:
-	# Find player and twin
-	var player_entity = _get_player_entity(present_panel)
-	var twin_entity = _get_twin_entity(present_panel)
-
-	if not player_entity:
-		print("  Cannot animate - missing player")
-		return
-
-	# Get all enemies with data
-	var enemy_list = []
-	for i in range(present_panel.state["enemies"].size()):
-		var enemy_data = present_panel.state["enemies"][i]
-		for entity in present_panel.entities:
-			if not entity.is_player and entity.entity_data["name"] == enemy_data["name"]:
-				enemy_list.append({"node": entity, "data": enemy_data, "index": i})
-				break
-
-	if enemy_list.size() == 0:
-		return
-
-	print("  Enemy attacks starting...")
-
-	# Animate each enemy sequentially
-	for enemy_info in enemy_list:
-		var enemy_index = enemy_info["index"]
-
-		# CHECK MISS FLAGS from GameState
-		if GameState.will_enemy_miss(enemy_index):
-			print("  Enemy ", enemy_index, " misses (Chaos Injection effect)")
+	# Each attacker attacks their target sequentially
+	for attacker in attackers:
+		# Skip if no target assigned or will miss
+		if attacker.attack_target_id == "" or attacker.will_miss:
+			if attacker.will_miss:
+				print("    ", attacker.entity_name, " misses (will_miss = true)")
 			continue
 
-		# Determine target: leftmost ally (twin or player)
-		var target = null
-		var target_is_twin = false
+		# Find target entity
+		var target = _find_entity_by_id(present_panel, attacker.attack_target_id)
+		if not target or not target.is_alive():
+			print("    ", attacker.entity_name, " has no valid target")
+			continue
 
-		# CHECK REDIRECT from GameState
-		if GameState.future_redirect_flag != null and GameState.future_redirect_flag.get("from_enemy", -1) == enemy_index:
-			var to_index = GameState.future_redirect_flag.get("to_enemy", -1)
-			if to_index >= 0 and to_index < enemy_list.size():
-				target = enemy_list[to_index]["node"]
-				print("  Enemy ", enemy_index, " attacks enemy ", to_index, " (Redirect effect)")
-		else:
-			# Find leftmost ally (by x-position) to attack
-			var leftmost_ally = null
-			var leftmost_x = INF
-			var leftmost_is_twin = false
+		# Find visual nodes for animation
+		var attacker_node = _find_entity_node(present_panel, attacker.unique_id)
+		var target_node = _find_entity_node(present_panel, target.unique_id)
 
-			# Check player
-			if player_entity and is_instance_valid(player_entity):
-				if player_entity.position.x < leftmost_x:
-					leftmost_x = player_entity.position.x
-					leftmost_ally = player_entity
-					leftmost_is_twin = false
+		if not attacker_node or not target_node:
+			print("    Warning: Could not find visual nodes for combat")
+			continue
 
-			# Check twin (if alive)
-			if twin_entity and is_instance_valid(twin_entity) and present_panel.state.has("twin"):
-				if present_panel.state["twin"]["hp"] > 0:  # Twin still alive
-					if twin_entity.position.x < leftmost_x:
-						leftmost_x = twin_entity.position.x
-						leftmost_ally = twin_entity
-						leftmost_is_twin = true
-
-			target = leftmost_ally
-			target_is_twin = leftmost_is_twin
-
-		await _animate_single_enemy_attack(enemy_info["node"], target, enemy_info["data"], target_is_twin, present_panel)
-
-		# Check if twin died from this attack
-		if target_is_twin and present_panel.state.has("twin"):
-			if present_panel.state["twin"]["hp"] <= 0:
-				print("  Twin defeated! Remaining enemies will attack player.")
-				# Remove twin from entities
-				if twin_entity and is_instance_valid(twin_entity):
-					Events.entity_died.emit(twin_entity)
-					present_panel.entities.erase(twin_entity)
-					twin_entity.visible = false
-					get_tree().create_timer(1.0).timeout.connect(func():
-						if is_instance_valid(twin_entity):
-							twin_entity.queue_free()
-					)
-				twin_entity = null
-
-	print("  All enemy attacks complete!")
+		# Execute attack animation
+		await _animate_attack(attacker, target, attacker_node, target_node, present_panel)
+		await get_tree().create_timer(0.1).timeout
 
 
-## Animate single enemy attacking target (player, twin, or another enemy)
-func _animate_single_enemy_attack(enemy: Node2D, target: Node2D, enemy_data: Dictionary, target_is_twin: bool, present_panel: Panel) -> void:
-	var original_pos = enemy.position
-	var target_pos = target.position
+# ============================================================================
+# SIMPLIFIED ATTACK ANIMATION
+# ============================================================================
+
+## Animate single attack with damage application
+func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: Node2D, target_node: Node2D, present_panel: Panel) -> void:
+	"""Animate single attack with damage application"""
+	var original_pos = attacker_node.position
+	var target_pos = target_node.position
 	var direction = (target_pos - original_pos).normalized()
 	var attack_pos = target_pos - direction * ATTACK_OFFSET
 
 	# Dash to target
 	var tween = create_tween()
-	tween.tween_property(enemy, "position", attack_pos, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(attacker_node, "position", attack_pos, ATTACK_DASH_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	await tween.finished
 
-	# APPLY DAMAGE AT IMPACT
-	var damage = enemy_data["damage"]
+	# Apply damage to data model
+	var damage = attacker.damage
+	var target_died = target.take_damage(damage)
 
-	# Check if target is player, twin, or enemy
-	if target.is_player:
-		if target_is_twin:
-			# Attacking twin
-			present_panel.state["twin"]["hp"] -= damage
-			print("  ", enemy_data["name"], " dealt ", damage, " damage to twin! Twin HP: ", present_panel.state["twin"]["hp"])
+	print("    ", attacker.entity_name, " dealt ", damage, " damage to ", target.entity_name, " (HP: ", target.hp, "/", target.max_hp, ")")
 
-			# Emit events
-			Events.enemy_attacked.emit(enemy, target)
-			Events.damage_dealt.emit(target, damage)
-			Events.hp_updated.emit(target, present_panel.state["twin"]["hp"])
+	# Visual feedback
+	if attacker_node.has_method("play_attack_sound"):
+		attacker_node.play_attack_sound()
 
-			# Update twin visual
-			target.entity_data = present_panel.state["twin"]
-			target.update_display()
-		else:
-			# Attacking player
-			present_panel.state["player"]["hp"] -= damage
-			print("  ", enemy_data["name"], " dealt ", damage, " damage! Player HP: ", present_panel.state["player"]["hp"])
-
-			# Emit events
-			Events.enemy_attacked.emit(enemy, target)
-			Events.damage_dealt.emit(target, damage)
-			Events.hp_updated.emit(target, present_panel.state["player"]["hp"])
-
-			# Update player visual
-			target.entity_data = present_panel.state["player"]
-			target.update_display()
-	else:
-		# Attacking another enemy (redirect)
-		for enemy_state in present_panel.state["enemies"]:
-			if enemy_state["name"] == target.entity_data["name"]:
-				enemy_state["hp"] -= damage
-				print("  ", enemy_data["name"], " dealt ", damage, " damage to ", enemy_state["name"], "! Enemy HP: ", enemy_state["hp"])
-
-				# Emit events
-				Events.enemy_attacked.emit(enemy, target)
-				Events.damage_dealt.emit(target, damage)
-
-				# Update enemy visual
-				target.entity_data = enemy_state
-				target.update_display()
-
-				# Remove if dead
-				if enemy_state["hp"] <= 0:
-					print("  ", enemy_state["name"], " defeated by redirect!")
-					Events.entity_died.emit(target)
-					present_panel.state["enemies"].erase(enemy_state)
-					present_panel.entities.erase(target)
-					target.visible = false
-					get_tree().create_timer(1.5).timeout.connect(func():
-						if is_instance_valid(target):
-							target.queue_free()
-					)
-				break
-
-	# Play attack sound
-	enemy.play_attack_sound()
-
-	# Screen shake via event
+	Events.damage_dealt.emit(target_node, damage)
 	Events.screen_shake_requested.emit(damage * 0.5)
 
-	# Hit reaction
-	var hit_direction = (target.position - enemy.position).normalized()
-	Events.hit_reaction_requested.emit(target, hit_direction)
-	target.play_hit_reaction(hit_direction)
+	var hit_direction = (target_node.position - attacker_node.position).normalized()
+	if target_node.has_method("play_hit_reaction"):
+		target_node.play_hit_reaction(hit_direction)
+
+	# Update visual display
+	if target_node.has_method("update_display"):
+		# Update the entity_data dictionary on the visual node
+		target_node.entity_data["hp"] = target.hp
+		target_node.update_display()
+
+	# Handle death
+	if target_died:
+		print("    💀 ", target.entity_name, " defeated!")
+		Events.entity_died.emit(target_node)
+
+		# Remove entity from PRESENT immediately
+		print("      Removing entity from PRESENT panel")
+		target_node.visible = false
+		target_node.queue_free()
+
+		# Remove from panel arrays immediately to prevent accessing freed node
+		if present_panel.entity_nodes.has(target_node):
+			present_panel.entity_nodes.erase(target_node)
+		if present_panel.entities.has(target_node):
+			present_panel.entities.erase(target_node)
+		if present_panel.entity_data_list.has(target):
+			present_panel.entity_data_list.erase(target)
 
 	# Pause
-	await get_tree().create_timer(0.08).timeout
+	await get_tree().create_timer(ATTACK_PAUSE_TIME).timeout
 
 	# Dash back
 	var tween2 = create_tween()
-	tween2.tween_property(enemy, "position", original_pos, 0.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tween2.tween_property(attacker_node, "position", original_pos, RETREAT_TIME).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	await tween2.finished
 
-
-## Animate remaining enemies repositioning after one dies using grid-based layout
-func _animate_enemy_repositioning(present_panel: Panel) -> void:
-	var enemy_entities = []
-	for entity in present_panel.entities:
-		if not entity.is_player and is_instance_valid(entity) and entity.visible:
-			enemy_entities.append(entity)
-
-	var enemy_count = enemy_entities.size()
-	if enemy_count == 0:
-		return  # No repositioning needed for 0 enemies
-
-	print("  ↔️ Repositioning ", enemy_count, " remaining enemies to grid cells...")
-
-	var tween = create_tween()
-	tween.set_parallel(true)
-
-	# Calculate and animate to new grid-based positions
-	for i in range(enemy_count):
-		var entity = enemy_entities[i]
-
-		# Get grid position for this enemy based on new count
-		var grid_pos = present_panel.get_grid_position_for_entity(i, false, enemy_count)
-		var new_pos = present_panel.get_cell_center_position(grid_pos.x, grid_pos.y)
-
-		print("    Enemy ", i, " → grid (", grid_pos.x, ", ", grid_pos.y, ") at ", new_pos)
-		tween.tween_property(entity, "position", new_pos, 0.4).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-
-	await tween.finished
-	print("  ✅ Enemy repositioning complete")
 
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
-## Find player entity in panel (excludes twin)
-func _get_player_entity(present_panel: Panel) -> Node2D:
-	for entity in present_panel.entities:
-		if entity.is_player and not entity.entity_data.get("is_twin", false):
+## Find EntityData by unique_id
+func _find_entity_by_id(present_panel: Panel, unique_id: String) -> EntityData:
+	"""Find EntityData by unique_id"""
+	for entity in present_panel.entity_data_list:
+		if entity.unique_id == unique_id:
 			return entity
 	return null
 
 
-## Find twin entity in panel
-func _get_twin_entity(present_panel: Panel) -> Node2D:
-	for entity in present_panel.entities:
-		if entity.is_player and entity.entity_data.get("is_twin", false):
-			return entity
+## Find visual entity node by unique_id
+func _find_entity_node(present_panel: Panel, unique_id: String) -> Node2D:
+	"""Find visual entity node by unique_id"""
+	for node in present_panel.entity_nodes:
+		# Check if node is valid before accessing properties (prevents crash when entity dies)
+		if node and is_instance_valid(node) and node.entity_data.get("unique_id") == unique_id:
+			return node
 	return null
 
 
-## Get first enemy as target (leftmost)
-func _get_target_enemy(present_panel: Panel) -> Node2D:
-	for entity in present_panel.entities:
-		if not entity.is_player:
-			return entity
-	return null
+# =============================================================================
+# COMBAT SYSTEM DOCUMENTATION
+# =============================================================================
+#
+# SIMPLIFIED COMBAT FLOW:
+#
+# 1. Get all entities with is_enemy = false (player team)
+# 2. For each: attack their attack_target_id
+# 3. Get all entities with is_enemy = true (enemy team)
+# 4. For each: attack their attack_target_id
+#
+# BENEFITS:
+# - No special cases for twins/conscription
+# - Target assignment handles all complexity
+# - Easy to add new entity types
+# - Deterministic and predictable
+# - Combat logic reduced from ~400 lines to ~150 lines
+#
+# INTEGRATION:
+# - TargetCalculator.calculate_targets() must be called before combat
+# - EntityData.attack_target_id determines who attacks whom
+# - EntityData.will_miss flag automatically skips attacks
+# - Visual nodes are found by matching unique_id
+#
+# USAGE:
+#   # Before combat:
+#   TargetCalculator.calculate_targets(present_panel)
+#
+#   # Execute combat:
+#   combat_resolver.execute_combat(present_panel)
+#
+# =============================================================================

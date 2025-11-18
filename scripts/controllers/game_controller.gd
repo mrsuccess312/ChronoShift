@@ -116,6 +116,7 @@ func _initialize_systems() -> void:
 func _connect_events() -> void:
 	"""Connect to global event bus"""
 	Events.damage_dealt.connect(_on_damage_dealt)
+	Events.combat_started.connect(_on_combat_started)
 	Events.combat_ended.connect(_on_combat_ended)
 	Events.timer_updated.connect(_on_timer_updated)
 	Events.wave_changed.connect(_on_wave_changed)
@@ -243,7 +244,7 @@ func _disable_all_input() -> void:
 
 	# Disable all entity interaction
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if entity and is_instance_valid(entity) and entity.has_node("Sprite"):
 				entity.get_node("Sprite").mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -261,9 +262,10 @@ func _enable_all_input() -> void:
 	# Re-enable panel interaction based on z_index
 	_update_panel_mouse_filters()
 
-	# Re-enable panels' mouse filters
+	# Re-enable panels' mouse filters AND grid interactivity
 	for panel in timeline_panels:
 		panel.mouse_filter = Control.MOUSE_FILTER_PASS
+		panel.set_grid_interactive(true)  # Re-enable grid cell clicks
 
 	# Re-enable entity interaction (targeting system will handle this)
 	# Entities will be re-enabled by targeting system when needed
@@ -299,25 +301,37 @@ func _build_carousel_snapshot() -> void:
 # ============================================================================
 
 func _initialize_game() -> void:
-	"""Set up initial game state"""
+	"""Set up initial game state with EntityData"""
 	print("🎮 Initializing game - Wave ", GameState.current_wave)
 
 	# Get the Present timeline panel
 	var present_panel = _get_timeline_panel("present")
 
-	# Create initial state
-	present_panel.state = {
-		"player": {
-			"name": "Chronomancer",
-			"hp": 100,
-			"max_hp": 100,
-			"damage": 15
-		},
-		"enemies": [
-			{"name": "Chrono-Beast A", "hp": 45, "max_hp": 45, "damage": 12},
-			{"name": "Chrono-Beast B", "hp": 30, "max_hp": 30, "damage": 8}
-		]
-	}
+	# Clear any existing entities
+	present_panel.entity_data_list.clear()
+
+	# Create player entity using EntityData
+	var player = EntityData.create_player()
+	player.entity_name = "Chronomancer"
+	player.hp = 100
+	player.max_hp = 100
+	player.damage = 15
+	present_panel.add_entity(player, 1, 0)  # Row 1, Column 0
+
+	# Create enemy entities
+	var enemy_a = EntityData.create_enemy("Chrono-Beast A", 45, 12)
+	present_panel.add_entity(enemy_a, 0, 2)  # Row 0, Column 2
+
+	var enemy_b = EntityData.create_enemy("Chrono-Beast B", 30, 8)
+	present_panel.add_entity(enemy_b, 1, 2)  # Row 1, Column 2
+
+	# Calculate combat targets using TargetCalculator
+	TargetCalculator.calculate_targets(present_panel)
+	print("  Initial targets calculated:")
+	TargetCalculator.print_target_summary(present_panel)
+
+	# Create backwards-compatible state dictionary for systems that still need it
+	present_panel.state = present_panel.get_state_dict()
 
 	# Store base damage in GameState
 	GameState.base_player_damage = 15
@@ -332,7 +346,7 @@ func _initialize_game() -> void:
 	# Initialize timer display
 	_update_timer_display()
 
-	print("✅ Game initialized\n")
+	print("✅ Game initialized with EntityData\n")
 
 # ============================================================================
 # TURN EXECUTION
@@ -371,6 +385,12 @@ func _execute_complete_turn() -> void:
 	# Phase 1: Carousel slide
 	await _carousel_slide_animation()
 
+	# Phase 1.5: Recreate entity visuals for new Present and Past
+	print("📋 Recreating entities after carousel...")
+	_create_timeline_entities(timeline_panels[1])  # Past
+	_create_timeline_entities(timeline_panels[2])  # Present
+	print("  ✅ Entities recreated")
+
 	# Phase 2: Post-carousel - show labels on new Present
 	_show_labels_after_carousel()
 
@@ -378,55 +398,42 @@ func _execute_complete_turn() -> void:
 	var present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel)
 
-	# Phase 3.5: Remove twin after combat (if still alive)
-	if present_panel.state.has("twin"):
-		print("  🗑️ Removing twin after combat...")
-		var twin_entity = null
-		for entity in present_panel.entities:
-			if entity.is_player and entity.entity_data.get("is_twin", false):
-				twin_entity = entity
-				break
+	# Update backwards-compatible state after combat (so carousel captures correct HP)
+	present_panel.state = present_panel.get_state_dict()
 
-		if twin_entity and is_instance_valid(twin_entity):
-			present_panel.entities.erase(twin_entity)
-			twin_entity.queue_free()
+	# Recalculate targets for PRESENT (enemies may have died, need to retarget)
+	print("  🎯 Recalculating targets for PRESENT after combat...")
+	TargetCalculator.calculate_targets(present_panel)
 
-		present_panel.state.erase("twin")
-		print("  ✅ Twin removed")
+	# Phase 3.5: Apply REAL_FUTURE if it was set by a card effect
+	if GameState.should_apply_real_future():
+		print("  🔄 Applying REAL_FUTURE timeline...")
+		var real_future_entities = GameState.get_real_future()
 
-	# Phase 4: Turn effects and damage restoration
-	# Restore player if conscription was active
-	if GameState.conscription_active:
-		print("🔄 Restoring player after conscription...")
-		present_panel.state["player"] = GameState.original_player_data.duplicate(true)
+		# Replace Present entities with REAL_FUTURE entities
+		present_panel.entity_data_list.clear()
+		for entity in real_future_entities:
+			present_panel.entity_data_list.append(entity.duplicate_entity())
 
-		# Update visual
-		var player_entity = null
-		for entity in present_panel.entities:
-			if entity.is_player and not entity.entity_data.get("is_twin", false):
-				player_entity = entity
-				break
+		# Update backwards-compatible state
+		present_panel.state = present_panel.get_state_dict()
 
-		if player_entity:
-			player_entity.entity_data = present_panel.state["player"]
-			player_entity.update_display()
+		# Clear REAL_FUTURE
+		GameState.clear_real_future()
+		print("  ✅ REAL_FUTURE applied - temporary effects cleaned up")
 
-		print("  ✅ Player restored: HP=", present_panel.state["player"]["hp"], " DMG=", present_panel.state["player"]["damage"])
-		GameState.reset_conscription()
-
-	# Restore damage if boost was active
-	if GameState.damage_boost_active and GameState.original_damage_before_boost > 0:
-		present_panel.state["player"]["damage"] = GameState.original_damage_before_boost
-		print("✅ Restored damage from boost to original value: ", GameState.original_damage_before_boost)
-		Events.damage_display_updated.emit(GameState.original_damage_before_boost)
-
+	# Phase 4: Turn effects cleanup
 	GameState.reset_turn_effects()
 	GameState.increment_turn()
 
-	# Phase 5: Check game over (skip if conscription was active - enemy death is OK)
-	# Note: We check conscription_active BEFORE reset, but we already reset it above
-	# So we need to check if player HP is actually <= 0 in original data
-	if present_panel.state["player"]["hp"] <= 0:
+	# Phase 5: Check game over
+	var player_entity = null
+	for entity in present_panel.entity_data_list:
+		if not entity.is_enemy:
+			player_entity = entity
+			break
+
+	if player_entity and player_entity.hp <= 0:
 		_enable_all_input()  # Re-enable input before game over
 		GameState.set_game_over()
 		return
@@ -450,7 +457,7 @@ func _execute_complete_turn() -> void:
 
 
 func _carousel_slide_animation() -> void:
-	"""Animate carousel sliding to reveal new present"""
+	"""Animate carousel sliding to reveal new present with EntityData"""
 	print("🎠 Carousel slide animation...")
 
 	# Stop hover animations
@@ -461,10 +468,19 @@ func _carousel_slide_animation() -> void:
 	_hide_ui_for_carousel()
 	_delete_all_arrows()
 
-	# Capture Past state from current Present
+	# Capture EntityData from current Present (slot 2)
 	var slot_2_panel = timeline_panels[2]
+	var entities_for_past: Array[EntityData] = []
+	var entities_for_new_present: Array[EntityData] = []
+
+	# Duplicate entities for Past and new Present
+	for entity in slot_2_panel.entity_data_list:
+		entities_for_past.append(entity.duplicate_entity())
+		entities_for_new_present.append(entity.duplicate_entity())
+
+	# Also capture backwards-compatible state
 	var state_for_past = slot_2_panel.state.duplicate(true)
-	var state_for_new_present = slot_2_panel.state.duplicate(true)  # New Present keeps current state
+	var state_for_new_present = slot_2_panel.state.duplicate(true)
 
 	# Rotate timeline panels array
 	var first_panel = timeline_panels.pop_front()
@@ -478,9 +494,13 @@ func _carousel_slide_animation() -> void:
 	timeline_panels[4].timeline_type = "decorative"
 	timeline_panels[5].timeline_type = "decorative"
 
-	# Assign states - CRITICAL: New Present gets actual current state, NOT predicted Future state
-	timeline_panels[1].state = state_for_past  # New Past gets old Present
-	timeline_panels[2].state = state_for_new_present  # New Present gets actual current state (NOT old Future!)
+	# Assign EntityData - CRITICAL: New Present gets actual entities, NOT Future predictions!
+	timeline_panels[1].entity_data_list = entities_for_past
+	timeline_panels[2].entity_data_list = entities_for_new_present
+
+	# Also assign backwards-compatible state
+	timeline_panels[1].state = state_for_past
+	timeline_panels[2].state = state_for_new_present
 
 	# Animate panels to new positions
 	var tween = create_tween()
@@ -503,6 +523,7 @@ func _carousel_slide_animation() -> void:
 	# Clear decorative panel states and entities AFTER slide animation
 	for i in [0, 4, 5]:
 		timeline_panels[i].state = {}
+		timeline_panels[i].entity_data_list.clear()
 		timeline_panels[i].clear_entities()
 		timeline_panels[i].clear_arrows()
 
@@ -521,7 +542,7 @@ func _prepare_for_carousel() -> void:
 
 	# Hide all HP/DMG labels
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				if entity.has_node("HPLabel"):
 					entity.get_node("HPLabel").visible = false
@@ -531,7 +552,7 @@ func _prepare_for_carousel() -> void:
 	# Un-gray dead entities in Future (they're about to become Present)
 	var future_panel = timeline_panels[3]
 	if future_panel and future_panel.timeline_type == "future":
-		for entity in future_panel.entities:
+		for entity in future_panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				entity.modulate = Color(1, 1, 1, 1)  # Restore normal color
 
@@ -548,7 +569,7 @@ func _show_labels_after_carousel() -> void:
 		_sync_entities_to_state(present_panel)
 
 		# Then show labels with correct values
-		for entity in present_panel.entities:
+		for entity in present_panel.entity_nodes:
 			if entity and is_instance_valid(entity):
 				if entity.has_node("HPLabel"):
 					entity.get_node("HPLabel").visible = true
@@ -567,20 +588,26 @@ func _sync_entities_to_state(panel: Panel) -> void:
 		return
 
 	var enemy_index = 0
-	for entity in panel.entities:
+	for entity in panel.entity_nodes:
 		if not entity or not is_instance_valid(entity):
 			continue
 
 		if entity.is_player:
 			# Update player entity data from panel state
 			if panel.state.has("player"):
+				# CRITICAL: Preserve unique_id before overwriting
+				var saved_unique_id = entity.entity_data.get("unique_id", "")
 				entity.entity_data = panel.state["player"].duplicate()
+				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
 				entity.update_display()
 				print("  Synced player: HP=", entity.entity_data["hp"])
 		else:
 			# Update enemy entity data from panel state
 			if panel.state.has("enemies") and enemy_index < panel.state["enemies"].size():
+				# CRITICAL: Preserve unique_id before overwriting
+				var saved_unique_id = entity.entity_data.get("unique_id", "")
 				entity.entity_data = panel.state["enemies"][enemy_index].duplicate()
+				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
 				entity.update_display()
 				print("  Synced enemy ", enemy_index, ": HP=", entity.entity_data["hp"])
 				enemy_index += 1
@@ -626,19 +653,77 @@ func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void
 # ============================================================================
 
 func _calculate_future_state() -> void:
-	"""Calculate Future timeline based on Present"""
+	"""Calculate Future timeline based on Present using EntityData"""
 	var present_panel = _get_timeline_panel("present")
 	var future_panel = _get_timeline_panel("future")
 
 	if not present_panel or not future_panel:
 		return
 
-	future_panel.state = _calculate_future_from_state(present_panel.state)
+	print("  🔮 Calculating Future timeline...")
+
+	# Clear future entities
+	future_panel.entity_data_list.clear()
+
+	# Duplicate all entities from Present to Future
+	for entity in present_panel.entity_data_list:
+		var future_entity = entity.duplicate_entity()
+		future_panel.entity_data_list.append(future_entity)
+
+	# Calculate targets for Future timeline
+	TargetCalculator.calculate_targets(future_panel)
+
+	# Simulate combat to get predicted HP values
+	_simulate_combat(future_panel)
+
+	# Create backwards-compatible state dictionary
+	future_panel.state = future_panel.get_state_dict()
 	future_panel.timeline_type = "future"
+
+	print("  ✅ Future timeline calculated")
+
+
+func _simulate_combat(panel: Panel) -> void:
+	"""Simulate combat on a timeline panel (non-animated, data-only)"""
+	# Phase 1: Player team attacks
+	for attacker in panel.entity_data_list:
+		if attacker.is_enemy or not attacker.is_alive():
+			continue
+		if attacker.attack_target_id == "" or attacker.will_miss:
+			continue
+
+		var target = _find_entity_data_by_id(panel, attacker.attack_target_id)
+		if target and target.is_alive():
+			var died = target.take_damage(attacker.damage)
+			if died:
+				target.is_death_forecasted = true  # Mark for removal during real combat
+			print("    [SIM] ", attacker.entity_name, " → ", target.entity_name, " (", target.hp, "/", target.max_hp, " HP)")
+
+	# Phase 2: Enemy team attacks
+	for attacker in panel.entity_data_list:
+		if not attacker.is_enemy or not attacker.is_alive():
+			continue
+		if attacker.attack_target_id == "" or attacker.will_miss:
+			continue
+
+		var target = _find_entity_data_by_id(panel, attacker.attack_target_id)
+		if target and target.is_alive():
+			var died = target.take_damage(attacker.damage)
+			if died:
+				target.is_death_forecasted = true  # Mark for removal during real combat
+			print("    [SIM] ", attacker.entity_name, " → ", target.entity_name, " (", target.hp, "/", target.max_hp, " HP)")
+
+
+func _find_entity_data_by_id(panel: Panel, unique_id: String) -> EntityData:
+	"""Find EntityData by unique_id in a panel"""
+	for entity in panel.entity_data_list:
+		if entity.unique_id == unique_id:
+			return entity
+	return null
 
 
 func _calculate_future_from_state(base_state: Dictionary) -> Dictionary:
-	"""Calculate future state from any given state"""
+	"""[DEPRECATED] Calculate future state from any given state - kept for backwards compatibility"""
 	var future = base_state.duplicate(true)
 
 	if future["enemies"].size() > 0:
@@ -663,12 +748,28 @@ func _calculate_future_from_state(base_state: Dictionary) -> Dictionary:
 
 
 func _recalculate_future_timelines() -> void:
-	"""Recalculate Future and Decorative Future after combat"""
+	"""Recalculate Future timeline after combat using EntityData"""
 	var present_panel = timeline_panels[2]
 	var future_panel = timeline_panels[3]
 
-	# Calculate Future based on current Present
-	future_panel.state = _calculate_future_from_state(present_panel.state)
+	print("  🔮 Recalculating Future timeline...")
+
+	# Clear future entities
+	future_panel.entity_data_list.clear()
+
+	# Duplicate all entities from Present to Future
+	for entity in present_panel.entity_data_list:
+		var future_entity = entity.duplicate_entity()
+		future_panel.entity_data_list.append(future_entity)
+
+	# Calculate targets for Future timeline
+	TargetCalculator.calculate_targets(future_panel)
+
+	# Simulate combat to get predicted HP values
+	_simulate_combat(future_panel)
+
+	# Create backwards-compatible state dictionary
+	future_panel.state = future_panel.get_state_dict()
 	future_panel.timeline_type = "future"
 
 	print("  ✅ Future recalculated")
@@ -686,187 +787,94 @@ func _get_timeline_panel(timeline_type: String) -> Panel:
 # ============================================================================
 
 func _create_timeline_entities(tp: Panel) -> void:
-	"""Create entity visuals for a timeline panel"""
+	"""Create entity visuals for a timeline panel using EntityData"""
 	tp.clear_entities()
 
-	if tp == null or tp.state.is_empty():
+	if tp == null or tp.entity_data_list.size() == 0:
 		return
 
-	var enemy_count = tp.state.get("enemies", []).size()
+	# Create visual nodes for each EntityData
+	for entity_data in tp.entity_data_list:
+		var entity_node = ENTITY_SCENE.instantiate()
 
-	# Create enemies
-	if tp.state.has("enemies"):
-		for i in range(enemy_count):
-			var enemy_entity = ENTITY_SCENE.instantiate()
-			enemy_entity.setup(tp.state["enemies"][i], false, tp.timeline_type)
+		# Convert EntityData to Dictionary for backwards compatibility with entity.gd
+		var entity_dict = entity_data.to_dict()
+		entity_node.setup(entity_dict, not entity_data.is_enemy, tp.timeline_type)
 
-			var grid_pos = tp.get_grid_position_for_entity(i, false, enemy_count)
-			var world_pos = tp.get_cell_center_position(grid_pos.x, grid_pos.y)
+		# Position entity at grid location
+		var world_pos = tp.get_cell_center_position(entity_data.grid_row, entity_data.grid_col)
+		entity_node.position = world_pos
 
-			enemy_entity.position = world_pos
-			tp.add_child(enemy_entity)
-			tp.entities.append(enemy_entity)
+		tp.add_child(entity_node)
+		tp.entity_nodes.append(entity_node)
+		tp.entities.append(entity_node)  # Also append to backwards-compatible array
 
-			# Gray out dead enemies in Future timeline
-			if tp.timeline_type == "future" and tp.state["enemies"][i].get("is_dead", false):
-				enemy_entity.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Grayed out
+		# Gray out dead entities in Future timeline
+		if tp.timeline_type == "future" and not entity_data.is_alive():
+			entity_node.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Grayed out
 
-	# Create player
-	var player_grid_pos = Vector2i(-1, -1)
-	if tp.state.has("player"):
-		var player_entity = ENTITY_SCENE.instantiate()
-		player_entity.setup(tp.state["player"], true, tp.timeline_type)
-
-		player_grid_pos = tp.get_grid_position_for_entity(0, true, enemy_count)
-		var world_pos = tp.get_cell_center_position(player_grid_pos.x, player_grid_pos.y)
-
-		player_entity.position = world_pos
-		tp.add_child(player_entity)
-		tp.entities.append(player_entity)
-
-		# Gray out dead player in Future timeline
-		if tp.timeline_type == "future" and tp.state["player"].get("is_dead", false):
-			player_entity.modulate = Color(0.5, 0.5, 0.5, 0.6)  # Grayed out
-
-	# Create twin if exists
-	if tp.state.has("twin"):
-		var twin_entity = ENTITY_SCENE.instantiate()
-		twin_entity.setup(tp.state["twin"], true, tp.timeline_type)
-
-		var twin_grid_pos = Vector2i(player_grid_pos.x, player_grid_pos.y - 1)
-		if twin_grid_pos.y < 0:
-			twin_grid_pos.y = 0
-
-		var world_pos = tp.get_cell_center_position(twin_grid_pos.x, twin_grid_pos.y)
-
-		twin_entity.position = world_pos
-		tp.add_child(twin_entity)
-		tp.entities.append(twin_entity)
+		# Store reference to EntityData in the visual node
+		entity_node.entity_data = entity_dict
+		entity_node.entity_data["unique_id"] = entity_data.unique_id
 
 
 func _create_timeline_arrows(tp: Panel) -> void:
-	"""Create arrows for a timeline panel based on its timeline_type"""
+	"""Create arrows for a timeline panel using EntityData and attack targets"""
 	tp.clear_arrows()
 
-	if tp == null or tp.state.is_empty():
+	if tp == null or tp.entity_data_list.size() == 0:
 		return
 
-	if not tp.state.has("enemies") or tp.state["enemies"].size() == 0:
+	# Determine which arrows to show based on timeline type
+	var show_player_arrows = (tp.timeline_type == "present")
+	var show_enemy_arrows = (tp.timeline_type == "future")
+
+	# Skip arrow creation for PAST and DECORATIVE timelines
+	if not show_player_arrows and not show_enemy_arrows:
 		return
 
-	match tp.timeline_type:
-		"past":
-			pass  # No arrows
-		"present":
-			_create_player_attack_arrows(tp)
-		"future":
-			_create_enemy_attack_arrows(tp)
+	# Create arrows based on EntityData attack targets
+	for attacker_data in tp.entity_data_list:
+		# Skip if no target or will miss
+		if attacker_data.attack_target_id == "" or attacker_data.will_miss:
+			continue
 
+		# Filter by team based on timeline type
+		if show_player_arrows and attacker_data.is_enemy:
+			continue
+		if show_enemy_arrows and not attacker_data.is_enemy:
+			continue
 
-func _create_player_attack_arrows(tp: Panel) -> void:
-	"""Create arrows from player and twin to leftmost enemy"""
-	var player_entity = null
-	var twin_entity = null
+		# Find target EntityData
+		var target_data = _find_entity_data_by_id(tp, attacker_data.attack_target_id)
+		if not target_data:
+			continue
 
-	for entity in tp.entities:
-		if entity.is_player:
-			if entity.entity_data.get("is_twin", false):
-				twin_entity = entity
-			else:
-				player_entity = entity
+		# Find visual nodes
+		var attacker_node = _find_entity_node_by_id(tp, attacker_data.unique_id)
+		var target_node = _find_entity_node_by_id(tp, target_data.unique_id)
 
-	if not player_entity:
-		return
+		if not attacker_node or not target_node:
+			continue
 
-	# Find leftmost ALIVE enemy (skip dead enemies in Future)
-	var target_enemy = null
-	var leftmost_x = INF
-	for i in range(tp.entities.size()):
-		var entity = tp.entities[i]
-		if not entity.is_player:
-			# Skip dead enemies in Future timeline
-			if tp.timeline_type == "future" and i < tp.state["enemies"].size():
-				if tp.state["enemies"][i].get("is_dead", false):
-					continue
-			if entity.position.x < leftmost_x:
-				leftmost_x = entity.position.x
-				target_enemy = entity
-
-	if not target_enemy:
-		return
-
-	# Player arrow
-	if player_entity:
+		# Create arrow
 		var arrow = ARROW_SCENE.instantiate()
 		arrow.z_index = 50
 		arrow.z_as_relative = true
-		arrow.visible = false  # Hide initially, show during combat
+		arrow.visible = false  # Hide initially
 		tp.add_child(arrow)
-		var curve = _calculate_smart_curve(player_entity.position, target_enemy.position)
-		arrow.setup(player_entity.position, target_enemy.position, curve)
+
+		var curve = _calculate_smart_curve(attacker_node.position, target_node.position)
+		arrow.setup(attacker_node.position, target_node.position, curve, attacker_data.unique_id, target_data.unique_id)
 		tp.arrows.append(arrow)
 
-	# Twin arrow
-	if twin_entity:
-		var twin_arrow = ARROW_SCENE.instantiate()
-		twin_arrow.z_index = 50
-		twin_arrow.z_as_relative = true
-		twin_arrow.visible = false  # Hide initially, show during combat
-		tp.add_child(twin_arrow)
-		var twin_curve = _calculate_smart_curve(twin_entity.position, target_enemy.position)
-		twin_arrow.setup(twin_entity.position, target_enemy.position, twin_curve)
-		tp.arrows.append(twin_arrow)
 
-
-func _create_enemy_attack_arrows(tp: Panel) -> void:
-	"""Create arrows from each enemy to player/twin"""
-	var player_entity = null
-	var twin_entity = null
-
-	for entity in tp.entities:
-		if entity.is_player:
-			if entity.entity_data.get("is_twin", false):
-				twin_entity = entity
-			else:
-				player_entity = entity
-
-	if not player_entity:
-		return
-
-	var default_target = twin_entity if twin_entity else player_entity
-
-	var enemy_entities = []
-	for entity in tp.entities:
-		if not entity.is_player:
-			enemy_entities.append(entity)
-
-	for i in range(enemy_entities.size()):
-		var enemy = enemy_entities[i]
-
-		# Skip if enemy is dead (in Future timeline)
-		if tp.timeline_type == "future" and tp.state["enemies"][i].get("is_dead", false):
-			continue
-
-		var target = default_target
-
-		# Check for redirect
-		if GameState.future_redirect_flag != null and GameState.future_redirect_flag.get("from_enemy", -1) == i:
-			var to_index = GameState.future_redirect_flag.get("to_enemy", -1)
-			if to_index >= 0 and to_index < enemy_entities.size():
-				target = enemy_entities[to_index]
-
-		# Skip if miss flag
-		if GameState.will_enemy_miss(i):
-			continue
-
-		var arrow = ARROW_SCENE.instantiate()
-		arrow.z_index = 50
-		arrow.z_as_relative = true
-		arrow.visible = false  # Hide initially, show during combat
-		tp.add_child(arrow)
-		var curve = _calculate_smart_curve(enemy.position, target.position)
-		arrow.setup(enemy.position, target.position, curve)
-		tp.arrows.append(arrow)
+func _find_entity_node_by_id(panel: Panel, unique_id: String) -> Node2D:
+	"""Find visual entity node by unique_id"""
+	for node in panel.entity_nodes:
+		if node.entity_data.get("unique_id") == unique_id:
+			return node
+	return null
 
 
 func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
@@ -907,7 +915,7 @@ func _update_all_timeline_displays() -> void:
 
 func _update_timeline_ui_visibility(tp: Panel) -> void:
 	"""Update UI element visibility based on timeline_type"""
-	for entity in tp.entities:
+	for entity in tp.entity_nodes:
 		if not entity or not is_instance_valid(entity):
 			continue
 
@@ -937,9 +945,34 @@ func _update_timeline_ui_visibility(tp: Panel) -> void:
 # EVENT HANDLERS
 # ============================================================================
 
+func _on_combat_started() -> void:
+	"""Handle combat start - disable UI to prevent freeze"""
+	print("  Combat phase started - disabling UI...")
+
+	# Disable card interactions
+	past_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	present_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	future_deck_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Disable grid cell interactions (timeline panels)
+	for panel in timeline_panels:
+		if panel and is_instance_valid(panel):
+			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
 func _on_combat_ended() -> void:
-	"""Handle combat end"""
-	print("  Combat phase ended")
+	"""Handle combat end - re-enable UI"""
+	print("  Combat phase ended - re-enabling UI...")
+
+	# Re-enable card interactions
+	past_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	present_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	future_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
+
+	# Re-enable grid cell interactions (timeline panels)
+	for panel in timeline_panels:
+		if panel and is_instance_valid(panel):
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 func _on_damage_dealt(target: Node2D, damage: int) -> void:
