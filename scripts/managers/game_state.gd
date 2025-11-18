@@ -29,10 +29,10 @@ var game_over: bool = false
 var timer_active: bool = true
 
 ## Current time remaining on the turn timer
-var time_remaining: float = 60.0
+var time_remaining: float = 360.0
 
 ## Maximum time allowed per turn
-var max_time: float = 60.0
+var max_time: float = 360.0
 
 # ============================================================================
 # PLAYER STATS

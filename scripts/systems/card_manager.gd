@@ -141,6 +141,7 @@ func on_card_played(card_data: Dictionary) -> void:
 
 ## Apply instant card effects (no targeting)
 func apply_card_effect_instant(card_data: Dictionary) -> void:
+	var future_tp = _get_timeline_panel("future")
 	var present_tp = _get_timeline_panel("present")
 	var past_tp = _get_timeline_panel("past")
 	var effect_type = card_data.get("effect_type")
@@ -204,7 +205,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 
 				# Calculate REAL_FUTURE with original damage (boost is temporary)
 				var real_future_entities: Array[EntityData] = []
-				for entity in present_tp.entity_data_list:
+				for entity in future_tp.entity_data_list:
 					var future_entity = entity.duplicate_entity()
 					# Revert damage boost for player in real future
 					if not future_entity.is_enemy and not future_entity.is_twin:
@@ -287,9 +288,9 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
-			var present_enemies = _get_enemy_entities_data(present_tp)
-			if present_enemies.size() > 0:
-				var conscripted_enemy = present_enemies[0]
+			var past_enemies = _get_enemy_entities_data(past_tp)
+			if past_enemies.size() > 0:
+				var conscripted_enemy = past_enemies[0]
 				print("🔄 Conscripting ", conscripted_enemy.entity_name)
 
 				# Find player entity in PRESENT
@@ -344,7 +345,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				var past_enemy = past_enemies[0]
 				var present_enemy = present_enemies[0]
 				# Calculate damage taken between Past and Present
-				var damage_taken = past_enemy.max_hp - past_enemy.hp - (present_enemy.max_hp - present_enemy.hp)
+				var damage_taken = present_enemy.max_hp - present_enemy.hp - (past_enemy.max_hp - past_enemy.hp)
 				if damage_taken > 0:
 					var died = present_enemy.take_damage(damage_taken)
 					print("Transferred ", damage_taken, " wound damage")
