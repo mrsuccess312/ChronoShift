@@ -309,7 +309,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
-					# Move player to enemy's PAST position (in PRESENT timeline coordinates)
+					# Move player to enemy's PAST position (coordinates only, for combat logic)
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
@@ -319,9 +319,9 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					past_enemy.is_enemy = false
 					past_enemy.is_conscripted = true
 
-					# Update PRESENT grid
+					# Update PRESENT grid - only conscripted enemy, remove player from old position
 					present_tp.cell_entities[player_row][player_col] = past_enemy
-					present_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
+					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
 					present_tp.entity_data_list.append(past_enemy)
@@ -633,7 +633,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					var past_enemy_row = past_enemy.grid_row
 					var past_enemy_col = past_enemy.grid_col
 
-					# Move player to enemy's PAST position (in PRESENT timeline coordinates)
+					# Move player to enemy's PAST position (coordinates only, for combat logic)
 					player_entity.grid_row = past_enemy_row
 					player_entity.grid_col = past_enemy_col
 
@@ -643,9 +643,9 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					past_enemy.is_enemy = false
 					past_enemy.is_conscripted = true
 
-					# Update PRESENT grid
+					# Update PRESENT grid - only conscripted enemy, remove player from old position
 					present_tp.cell_entities[player_row][player_col] = past_enemy
-					present_tp.cell_entities[past_enemy_row][past_enemy_col] = player_entity
+					# Don't add player to PRESENT grid at enemy position - player should only appear in PAST
 
 					# Add conscripted enemy to PRESENT entity list
 					present_tp.entity_data_list.append(past_enemy)
