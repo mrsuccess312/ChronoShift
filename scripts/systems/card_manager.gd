@@ -208,17 +208,17 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
-				# Initialize or update REAL_FUTURE to revert damage boost after combat
-				GameState.ensure_real_future_initialized(present_tp)
+				# Request future recalculation to show boosted future FIRST
+				Events.future_recalculation_requested.emit()
+
+				# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+				GameState.ensure_real_future_initialized(future_tp)
 				# Revert damage boost for player in REAL_FUTURE
 				var modified = GameState.modify_real_future_entity(player_entity.unique_id, func(e):
 					e.damage = original_damage
 				)
 				if modified:
 					print("  📍 REAL_FUTURE updated (damage will revert to ", original_damage, " after combat)")
-
-				# Request future recalculation to show boosted future
-				Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.ENEMY_SWAP:
 			var enemies = _get_enemy_entities_data(present_tp)
@@ -286,15 +286,15 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					# Recalculate targets so twin can attack during combat
 					TargetCalculator.calculate_targets(present_tp)
 
-					# Initialize or update REAL_FUTURE to remove twin after combat
-					GameState.ensure_real_future_initialized(present_tp)
+					# Request future recalculation to show twin in predicted future FIRST
+					Events.future_recalculation_requested.emit()
+
+					# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+					GameState.ensure_real_future_initialized(future_tp)
 					# Remove twin from REAL_FUTURE (twin disappears after combat)
 					var removed = GameState.remove_from_real_future(twin.unique_id)
 					if removed:
 						print("  📍 REAL_FUTURE updated (twin will disappear after combat)")
-
-					# Request future recalculation to show twin in predicted future
-					Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.CONSCRIPT_PAST_ENEMY:
 			var past_enemies = _get_enemy_entities_data(past_tp)
@@ -354,9 +354,12 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
 
-					# Initialize or update REAL_FUTURE: player returns, conscripted enemy removed
-					GameState.ensure_real_future_initialized(present_tp)
-					# Remove conscripted enemy from REAL_FUTURE
+					# Request future recalculation FIRST
+					Events.future_recalculation_requested.emit()
+
+					# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+					GameState.ensure_real_future_initialized(future_tp)
+					# Remove conscripted enemy from REAL_FUTURE (temporary entity)
 					GameState.remove_from_real_future(conscripted_enemy.unique_id)
 					# Add player back to REAL_FUTURE at original position (player is currently in PAST)
 					var future_player = player_entity.duplicate_entity()
@@ -364,9 +367,6 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					future_player.grid_col = player_col
 					GameState.add_to_real_future(future_player)
 					print("  📍 REAL_FUTURE updated (player will return, conscripted enemy removed)")
-
-					# Request future recalculation
-					Events.future_recalculation_requested.emit()
 					print("  ✅ Conscription complete")
 
 		CardDatabase.EffectType.WOUND_TRANSFER:
@@ -433,17 +433,17 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				# Sync to backwards-compatible state
 				present_tp.state = present_tp.get_state_dict()
 
-				# Initialize or update REAL_FUTURE to clear will_miss after one turn
-				GameState.ensure_real_future_initialized(present_tp)
+				# Request future recalculation to apply miss flags in FUTURE FIRST
+				Events.future_recalculation_requested.emit()
+
+				# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+				GameState.ensure_real_future_initialized(future_tp)
 				# Clear will_miss for affected enemies in REAL_FUTURE (they only miss one turn)
 				for enemy_id in missing_enemy_ids:
 					GameState.modify_real_future_entity(enemy_id, func(e):
 						e.will_miss = false
 					)
 				print("  📍 REAL_FUTURE updated (enemies will only miss one turn)")
-
-				# Request future recalculation to apply miss flags in FUTURE
-				Events.future_recalculation_requested.emit()
 
 		CardDatabase.EffectType.FUTURE_SELF_AID:
 			var player_entity = _get_player_entity_data(present_tp)
@@ -684,28 +684,19 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
 
-					# Initialize or update REAL_FUTURE: player returns, conscripted enemy removed
-					GameState.ensure_real_future_initialized(present_tp)
-					# Remove conscripted enemy from REAL_FUTURE
+					# Request future recalculation FIRST
+					Events.future_recalculation_requested.emit()
+
+					# Initialize or update REAL_FUTURE from FUTURE panel (after recalculation)
+					GameState.ensure_real_future_initialized(future_tp)
+					# Remove conscripted enemy from REAL_FUTURE (temporary entity)
 					GameState.remove_from_real_future(conscripted_enemy.unique_id)
 					# Add player back to REAL_FUTURE at original position (player is currently in PAST)
 					var future_player = player_entity.duplicate_entity()
 					future_player.grid_row = player_row
 					future_player.grid_col = player_col
 					GameState.add_to_real_future(future_player)
-
-					for entity in future_tp.entity_data_list:
-						# Skip conscripted enemy (doesn't exist in real future)
-						if entity.is_conscripted:
-							continue
-						# Keep other entities (other enemies, etc.)
-						var future_entity = entity.duplicate_entity()
-						GameState.add_to_real_future(future_entity)
-
 					print("  📍 REAL_FUTURE updated (player will return, conscripted enemy removed)")
-
-					# Request future recalculation to show conscripted future
-					Events.future_recalculation_requested.emit()
 					print("  ✅ Conscription complete")
 
 
