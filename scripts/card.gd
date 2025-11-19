@@ -53,6 +53,10 @@ func _gui_input(event: InputEvent):
 	if is_used:
 		return  # Can't click used cards
 
+	# CRITICAL: Don't respond during combat/animations (when timer is stopped)
+	if not GameState.timer_active:
+		return
+
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_on_card_clicked()
@@ -84,6 +88,10 @@ func _on_mouse_entered():
 	if is_used:
 		return  # Don't respond to hover if used
 
+	# CRITICAL: Don't respond during combat/animations (when timer is stopped)
+	if not GameState.timer_active:
+		return
+
 	is_hovered = true
 
 	# Stop any existing tweens first
@@ -99,6 +107,10 @@ func _on_mouse_exited():
 	"""Called when mouse leaves card"""
 	if is_used:
 		return  # Don't respond if used
+
+	# CRITICAL: Don't respond during combat/animations (when timer is stopped)
+	if not GameState.timer_active:
+		return
 
 	is_hovered = false
 
