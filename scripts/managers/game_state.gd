@@ -282,6 +282,10 @@ func ensure_real_future_initialized(source_panel) -> void:
 			if not future_entity.is_alive():
 				continue  # Skip dead entities
 
+			if future_entity.is_conscripted:
+				print("  ⏭️ Skipping conscripted enemy: ", future_entity.unique_id)
+				continue
+
 			if existing_ids.has(future_entity.unique_id):
 				# Entity exists in REAL_FUTURE - update its stats
 				for real_entity in real_future_entities:
@@ -301,9 +305,12 @@ func ensure_real_future_initialized(source_panel) -> void:
 				new_entities.append(future_entity.duplicate_entity())
 
 		# Now safely add all new entities to REAL_FUTURE
-		for new_entity in new_entities:
-			real_future_entities.append(new_entity)
-			print("  ✅ Added new entity to REAL_FUTURE: ", new_entity.unique_id)
+		for entity in source_panel.entity_data_list:
+			# Only copy living, non-conscripted entities to REAL_FUTURE
+			if entity.is_alive() and not entity.is_conscripted:
+				real_future_entities.append(entity.duplicate_entity())
+			elif entity.is_conscripted:
+				print("  ⏭️ Skipping conscripted enemy during init: ", entity.unique_id)
 
 		print("  ✅ REAL_FUTURE updated (", real_future_entities.size(), " total entities)")
 		return  # Already initialized, just updated

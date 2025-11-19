@@ -468,7 +468,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						target_name = entity.entity_name
 						break
 
-				# Set attack_target_id in PRESENT
+				# Set attack_target_id in FUTURE
 				for entity in future_tp.entity_data_list:
 					if entity.unique_id == source_enemy_id and entity.is_enemy:
 						entity.attack_target_id = target_enemy_id
@@ -479,7 +479,8 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 				# Sync to backwards-compatible state
 				future_tp.state = future_tp.get_state_dict()
 
-				TargetCalculator.calculate_targets(future_tp)
+				# DON'T recalculate targets - we just manually set the redirect!
+				# TargetCalculator.calculate_targets() would overwrite our manual redirect
 
 				# Request future recalculation to show redirect in FUTURE
 				Events.future_recalculation_requested.emit()
