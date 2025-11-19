@@ -240,7 +240,6 @@ func _disable_all_input() -> void:
 	# Disable panel interaction
 	for panel in timeline_panels:
 		panel.set_grid_interactive(false)
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Disable all entity interaction
 	for panel in timeline_panels:
@@ -262,11 +261,6 @@ func _enable_all_input() -> void:
 	# Re-enable panel interaction based on z_index
 	_update_panel_mouse_filters()
 
-	# Re-enable panels' mouse filters
-	# NOTE: Don't override grid_interactive here - _update_panel_mouse_filters already set it correctly based on z_index
-	for panel in timeline_panels:
-		# Use STOP instead of PASS so Area2D grid cells can receive mouse events
-		panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Re-enable entity interaction (targeting system will handle this)
 	# Entities will be re-enabled by targeting system when needed
@@ -971,7 +965,6 @@ func _on_combat_started() -> void:
 	# Disable grid cell interactions (timeline panels)
 	for panel in timeline_panels:
 		if panel and is_instance_valid(panel):
-			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			panel.set_grid_interactive(false)  # Also disable grid cells
 
 
@@ -988,7 +981,7 @@ func _on_combat_ended() -> void:
 	_update_panel_mouse_filters()  # This sets grid_interactive based on z_index
 	for panel in timeline_panels:
 		if panel and is_instance_valid(panel):
-			panel.mouse_filter = Control.MOUSE_FILTER_STOP
+			panel.set_grid_interactive(true)
 
 
 func _on_damage_dealt(target: Node2D, damage: int) -> void:
