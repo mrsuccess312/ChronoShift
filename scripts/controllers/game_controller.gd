@@ -318,6 +318,9 @@ func _initialize_game() -> void:
 	player.damage = 15
 	present_panel.add_entity(player, 3, 2)  # Row 1, Column 0
 
+	# Store player's unique_id in GameState for tracking across timelines
+	GameState.player_unique_id = player.unique_id
+
 	# Create enemy entities
 	var enemy_a = EntityData.create_enemy("Chrono-Beast A", 45, 12)
 	present_panel.add_entity(enemy_a, 1, 1)  # Row 0, Column 2
@@ -380,8 +383,16 @@ func _execute_complete_turn() -> void:
 	_disable_all_input()
 
 	# Phase 0: Pre-carousel - hide labels/arrows, un-gray Future entities
-	_prepare_for_carousel()
+	_delete_all_arrows()
 
+	await get_tree().create_timer(0.2).timeout
+	
+	var present_panel = timeline_panels[2]
+
+	await combat_resolver.execute_combat(present_panel, false)
+
+	_prepare_for_carousel()
+	
 	# Phase 1: Carousel slide
 	await _carousel_slide_animation()
 
@@ -395,8 +406,8 @@ func _execute_complete_turn() -> void:
 	_show_labels_after_carousel()
 
 	# Phase 3: Combat (via CombatResolver)
-	var present_panel = timeline_panels[2]
-	await combat_resolver.execute_combat(present_panel)
+	present_panel = timeline_panels[2]
+	await combat_resolver.execute_combat(present_panel, true)
 
 	# Update backwards-compatible state after combat (so carousel captures correct HP)
 	present_panel.state = present_panel.get_state_dict()
@@ -466,21 +477,26 @@ func _carousel_slide_animation() -> void:
 
 	# Hide UI and arrows
 	_hide_ui_for_carousel()
-	_delete_all_arrows()
 
 	# Capture EntityData from current Present (slot 2)
 	var slot_2_panel = timeline_panels[2]
+	var slot_3_panel = timeline_panels[3]
 	var entities_for_past: Array[EntityData] = []
 	var entities_for_new_present: Array[EntityData] = []
 
 	# Duplicate entities for Past and new Present
 	for entity in slot_2_panel.entity_data_list:
+		if !entity.is_enemy:
+			entities_for_new_present.append(entity.duplicate_entity())
 		entities_for_past.append(entity.duplicate_entity())
-		entities_for_new_present.append(entity.duplicate_entity())
+
+	for entity in slot_3_panel.entity_data_list:
+		if entity.is_enemy:
+			entities_for_new_present.append(entity.duplicate_entity())
 
 	# Also capture backwards-compatible state
 	var state_for_past = slot_2_panel.state.duplicate(true)
-	var state_for_new_present = slot_2_panel.state.duplicate(true)
+	var state_for_new_present = slot_3_panel.state.duplicate(true)
 
 	# Rotate timeline panels array
 	var first_panel = timeline_panels.pop_front()
@@ -564,20 +580,17 @@ func _show_labels_after_carousel() -> void:
 	print("📋 Showing labels after carousel...")
 
 	var present_panel = timeline_panels[2]
-	if present_panel and present_panel.timeline_type == "present":
-		# First, update entity data to match actual Present state (not Future predictions)
-		_sync_entities_to_state(present_panel)
 
-		# Then show labels with correct values
-		for entity in present_panel.entity_nodes:
-			if entity and is_instance_valid(entity):
-				if entity.has_node("HPLabel"):
-					entity.get_node("HPLabel").visible = true
-				if entity.has_node("DamageLabel"):
-					var dmg_label = entity.get_node("DamageLabel")
-					# Only show damage labels for enemies
-					if not entity.is_player:
-						dmg_label.visible = true
+	# Then show labels with correct values
+	for entity in present_panel.entity_nodes:
+		if entity and is_instance_valid(entity):
+			if entity.has_node("HPLabel"):
+				entity.get_node("HPLabel").visible = true
+			if entity.has_node("DamageLabel"):
+				var dmg_label = entity.get_node("DamageLabel")
+				# Only show damage labels for enemies
+				if not entity.is_player:
+					dmg_label.visible = true
 
 	print("  Labels shown on new Present with actual state values")
 

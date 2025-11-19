@@ -26,7 +26,7 @@ const ATTACK_OFFSET = 50.0
 
 ## Main entry point for combat resolution
 ## Orchestrates the full combat sequence on the Present panel
-func execute_combat(present_panel: Panel) -> void:
+func execute_combat(present_panel: Panel, attacking_team_is_enemy: bool) -> void:
 	"""Main combat orchestrator - simplified target-based version"""
 	print("CombatResolver: Starting combat...")
 	Events.combat_started.emit()
@@ -52,11 +52,11 @@ func execute_combat(present_panel: Panel) -> void:
 		return
 
 	# Phase 1: Player team attacks (is_enemy = false)
-	await _execute_team_attacks(present_panel, false)
+	await _execute_team_attacks(present_panel, attacking_team_is_enemy)
 	await get_tree().create_timer(0.2).timeout
 
 	# Phase 2: Enemy team attacks (is_enemy = true)
-	await _execute_team_attacks(present_panel, true)
+	# await _execute_team_attacks(present_panel, true)
 
 	Events.combat_ended.emit()
 	print("CombatResolver: Combat complete")
@@ -82,7 +82,15 @@ func _execute_team_attacks(present_panel: Panel, attacking_team_is_enemy: bool) 
 		print("    No attackers in ", team_name)
 		return
 
-	# Each attacker attacks their target sequentially
+	# Sort attackers by grid position (left to right, top to bottom)
+	# This ensures attacks execute in visual order regardless of entity_data_list order
+	attackers.sort_custom(func(a, b):
+		if a.grid_col != b.grid_col:
+			return a.grid_col < b.grid_col  # Left to right
+		return a.grid_row < b.grid_row  # Top to bottom (tiebreaker)
+	)
+
+	# Each attacker attacks their target sequentially (now in grid order)
 	for attacker in attackers:
 		# Skip if no target assigned or will miss
 		if attacker.attack_target_id == "" or attacker.will_miss:

@@ -38,6 +38,9 @@ var max_time: float = 360.0
 # PLAYER STATS
 # ============================================================================
 
+## Unique ID of the player entity (set at game start, used to track player across timelines)
+var player_unique_id: String = ""
+
 ## Base damage value for player attacks
 var base_player_damage: int = 15
 
@@ -248,6 +251,100 @@ func clear_real_future() -> void:
 ## Returns true if there's a real future that differs from predicted
 func should_apply_real_future() -> bool:
 	return has_real_future
+
+
+## Initialize REAL_FUTURE from source panel if not already initialized
+## This allows multiple cards to cumulatively update REAL_FUTURE
+func ensure_real_future_initialized(source_panel) -> void:
+	"""Initialize REAL_FUTURE from FUTURE panel if it doesn't exist yet.
+	This allows multiple cards played in the same turn to all contribute to REAL_FUTURE.
+	If REAL_FUTURE already exists, updates entity stats from new FUTURE (HP, position, targets)
+	while preserving card modifications (damage, will_miss).
+	Only copies living entities - dead entities are excluded from REAL_FUTURE.
+	"""
+	if not source_panel or not is_instance_valid(source_panel):
+		return
+
+	if has_real_future:
+		# REAL_FUTURE already initialized by previous card
+		# Update entity stats from newly recalculated FUTURE while preserving modifications
+		print("📍 REAL_FUTURE updating entity stats from recalculated FUTURE...")
+
+		var new_entities = []
+
+		# Build set of existing unique_ids for fast lookup
+		var existing_ids = {}
+		for real_entity in real_future_entities:
+			existing_ids[real_entity.unique_id] = true
+
+		# Process each future entity
+		for future_entity in source_panel.entity_data_list:
+			if not future_entity.is_alive():
+				continue  # Skip dead entities
+
+			if existing_ids.has(future_entity.unique_id):
+				# Entity exists in REAL_FUTURE - update its stats
+				for real_entity in real_future_entities:
+					if real_entity.unique_id == future_entity.unique_id:
+						# Update simulation state (HP, position, targets)
+						real_entity.hp = future_entity.hp
+						real_entity.max_hp = future_entity.max_hp
+						real_entity.grid_row = future_entity.grid_row
+						real_entity.grid_col = future_entity.grid_col
+						real_entity.attack_target_id = future_entity.attack_target_id
+						# DON'T update: damage (BOOST_DAMAGE modifications)
+						# DON'T update: will_miss (CHAOS_INJECTION modifications)
+						break
+			else:
+				# Entity is NEW (e.g., revived enemy) - add to new_entities list
+				print("  🆕 New entity detected: ", future_entity.unique_id)
+				new_entities.append(future_entity.duplicate_entity())
+
+		# Now safely add all new entities to REAL_FUTURE
+		for new_entity in new_entities:
+			real_future_entities.append(new_entity)
+			print("  ✅ Added new entity to REAL_FUTURE: ", new_entity.unique_id)
+
+		print("  ✅ REAL_FUTURE updated (", real_future_entities.size(), " total entities)")
+		return  # Already initialized, just updated
+
+	# Initialize from source panel (typically FUTURE), excluding dead entities
+	for entity in source_panel.entity_data_list:
+		# Only copy living entities to REAL_FUTURE
+		if entity.is_alive():
+			real_future_entities.append(entity.duplicate_entity())
+	has_real_future = true
+	print("📍 REAL_FUTURE initialized (", real_future_entities.size(), " living entities)")
+
+
+## Modify a specific entity in REAL_FUTURE by unique_id
+func modify_real_future_entity(unique_id: String, modifier_func: Callable) -> bool:
+	"""Find entity in REAL_FUTURE by unique_id and apply modifier function.
+	Returns true if entity was found and modified, false otherwise.
+	"""
+	for entity in real_future_entities:
+		if entity.unique_id == unique_id:
+			modifier_func.call(entity)
+			return true
+	return false
+
+
+## Remove entity from REAL_FUTURE by unique_id
+func remove_from_real_future(unique_id: String) -> bool:
+	"""Remove entity from REAL_FUTURE by unique_id.
+	Returns true if entity was found and removed, false otherwise.
+	"""
+	for i in range(real_future_entities.size() - 1, -1, -1):
+		if real_future_entities[i].unique_id == unique_id:
+			real_future_entities.remove_at(i)
+			return true
+	return false
+
+
+## Add entity to REAL_FUTURE
+func add_to_real_future(entity: EntityData) -> void:
+	"""Add a new entity to REAL_FUTURE (e.g., restoring removed entities)"""
+	real_future_entities.append(entity.duplicate_entity())
 
 # ============================================================================
 # INITIALIZATION

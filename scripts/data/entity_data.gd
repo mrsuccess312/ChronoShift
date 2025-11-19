@@ -139,5 +139,8 @@ func to_dict() -> Dictionary:
 		"damage": damage,
 		"target": attack_target_id,
 		"will_miss": will_miss,
-		"position": Vector2i(grid_row, grid_col)
+		"position": Vector2i(grid_row, grid_col),
+		"is_twin": is_twin,
+		"is_conscripted": is_conscripted,
+		"is_conscripted_enemy": is_conscripted  # Backwards compatibility for visual nodes
 	}

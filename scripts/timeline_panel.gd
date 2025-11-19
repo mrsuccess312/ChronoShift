@@ -449,22 +449,72 @@ func get_state_dict() -> Dictionary:
 
 	var state = {}
 
-	if player_entities.size() > 0:
-		var player = player_entities[0]
+	# Separate player-team entities into real player, twin, and conscripted
+	var real_player = null
+	var twin_entity = null
+	var conscripted_entities = []
+
+	for entity in player_entities:
+		if entity.is_twin:
+			twin_entity = entity
+		elif entity.is_conscripted:
+			conscripted_entities.append(entity)
+		else:
+			real_player = entity
+
+	# Add real player if exists
+	if real_player:
 		state["player"] = {
-			"name": player.entity_name,
-			"hp": player.hp,
-			"max_hp": player.max_hp,
-			"damage": player.damage
+			"name": real_player.entity_name,
+			"hp": real_player.hp,
+			"max_hp": real_player.max_hp,
+			"damage": real_player.damage,
+			"unique_id": real_player.unique_id,
+			"is_twin": false,
+			"is_conscripted": false,
+			"is_conscripted_enemy": false
 		}
 
+	# Add twin if exists
+	if twin_entity:
+		state["twin"] = {
+			"name": twin_entity.entity_name,
+			"hp": twin_entity.hp,
+			"max_hp": twin_entity.max_hp,
+			"damage": twin_entity.damage,
+			"unique_id": twin_entity.unique_id,
+			"is_twin": true,
+			"is_conscripted": false,
+			"is_conscripted_enemy": false
+		}
+
+	# Add conscripted enemies to enemies array (they render as enemies but fight for you)
 	state["enemies"] = []
+
+	# Add conscripted entities first
+	for conscripted in conscripted_entities:
+		state["enemies"].append({
+			"name": conscripted.entity_name,
+			"hp": conscripted.hp,
+			"max_hp": conscripted.max_hp,
+			"damage": conscripted.damage,
+			"unique_id": conscripted.unique_id,
+			"is_twin": false,
+			"is_conscripted": true,
+			"is_conscripted_enemy": true
+		})
+
+	# Add real enemies
 	for enemy in enemy_entities:
 		state["enemies"].append({
 			"name": enemy.entity_name,
 			"hp": enemy.hp,
 			"max_hp": enemy.max_hp,
-			"damage": enemy.damage
+			"damage": enemy.damage,
+			"unique_id": enemy.unique_id,
+			"is_twin": enemy.is_twin,
+			"is_conscripted": false,
+			"is_conscripted_enemy": false
 		})
 
 	return state
