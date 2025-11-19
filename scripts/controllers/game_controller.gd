@@ -972,6 +972,7 @@ func _on_combat_started() -> void:
 	for panel in timeline_panels:
 		if panel and is_instance_valid(panel):
 			panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			panel.set_grid_interactive(false)  # Also disable grid cells
 
 
 func _on_combat_ended() -> void:
@@ -983,7 +984,8 @@ func _on_combat_ended() -> void:
 	present_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
 	future_deck_container.mouse_filter = Control.MOUSE_FILTER_STOP
 
-	# Re-enable grid cell interactions (timeline panels)
+	# Re-enable grid cell interactions (timeline panels) based on z_index
+	_update_panel_mouse_filters()  # This sets grid_interactive based on z_index
 	for panel in timeline_panels:
 		if panel and is_instance_valid(panel):
 			panel.mouse_filter = Control.MOUSE_FILTER_STOP
