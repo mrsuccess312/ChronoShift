@@ -163,8 +163,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				Events.hp_updated.emit(null, player_entity.hp)
 				# Update visual display
 				_update_entity_visuals(present_tp, player_entity)
-				# Sync to backwards-compatible state
-				present_tp.state = present_tp.get_state_dict()
+				# EntityData is source of truth - no state sync needed
 			else:
 				print("Cannot heal - player not in PRESENT timeline (possibly conscripted to PAST)")
 			
@@ -188,8 +187,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				_update_entity_visuals(present_tp, enemy)
 				_update_entity_visuals(future_tp, enemy)
 			print("Dealt ", effect_value, " damage to all enemies")
-			# Sync to backwards-compatible state
-			present_tp.state = present_tp.get_state_dict()
+			# EntityData is source of truth - no state sync needed
 
 			Events.future_recalculation_requested.emit()
 			GameState.ensure_real_future_initialized(future_tp)
@@ -204,8 +202,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 				Events.damage_display_updated.emit(player_entity.damage)
 				# Update visual display
 				_update_entity_visuals(present_tp, player_entity)
-				# Sync to backwards-compatible state
-				present_tp.state = present_tp.get_state_dict()
+				# EntityData is source of truth - no state sync needed
 
 				# Request future recalculation to show boosted future FIRST
 				Events.future_recalculation_requested.emit()
@@ -241,8 +238,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					_update_entity_visuals(present_tp, present_player)
 					Events.future_recalculation_requested.emit()
 					GameState.ensure_real_future_initialized(future_tp)
-					# Sync to backwards-compatible state
-					present_tp.state = present_tp.get_state_dict()
+					# EntityData is source of truth - no state sync needed
 			else:
 				print("Cannot heal - player not in PRESENT timeline (possibly conscripted to PAST)")
 
@@ -272,8 +268,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					print("  Twin positioned at (", twin.grid_row, ", ", twin.grid_col, ")")
 					print("  ✅ Past Twin summoned to fight alongside you!")
 
-					# Sync to backwards-compatible state
-					present_tp.state = present_tp.get_state_dict()
+					# EntityData is source of truth - no state sync needed
 
 					# Recalculate targets so twin can attack during combat
 					TargetCalculator.calculate_targets(present_tp)
@@ -308,8 +303,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 						_update_entity_visuals(present_tp, present_enemy)
 				else:
 					print("No wounds to transfer (PAST: ", past_wounds, " wounds, PRESENT: ", present_wounds, " wounds)")
-				# Sync to backwards-compatible state
-				present_tp.state = present_tp.get_state_dict()
+				# EntityData is source of truth - no state sync needed
 				# Recalculate future since enemy HP changed
 				Events.future_recalculation_requested.emit()
 				GameState.ensure_real_future_initialized(future_tp)
@@ -333,8 +327,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					missing_enemy_ids.append(shuffled_enemies[i].unique_id)
 					print("Chaos Injection: ", shuffled_enemies[i].entity_name, " will miss next turn")
 
-				# Sync to backwards-compatible state
-				present_tp.state = present_tp.get_state_dict()
+				# EntityData is source of truth - no state sync needed
 
 				# Request future recalculation to apply miss flags in FUTURE FIRST
 				Events.future_recalculation_requested.emit()
@@ -357,8 +350,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					Events.hp_updated.emit(null, player_entity.hp)
 					# Update visual display
 					_update_entity_visuals(present_tp, player_entity)
-					# Sync to backwards-compatible state
-					present_tp.state = present_tp.get_state_dict()
+					# EntityData is source of truth - no state sync needed
 				else:
 					print("Cannot use Future Self Aid - HP too high (must be ≤ 25)")
 
@@ -373,8 +365,7 @@ func apply_card_effect_instant(card_data: Dictionary) -> void:
 					miss_count += 1
 					print("Timeline Scramble: ", entity.entity_name, " will miss")
 			print("Timeline Scramble: ", miss_count, " entities will miss in Future!")
-			# Sync to backwards-compatible state
-			present_tp.state = present_tp.get_state_dict()
+			# EntityData is source of truth - no state sync needed
 
 			# Request future recalculation to apply miss flags in FUTURE FIRST
 			Events.future_recalculation_requested.emit()
@@ -415,8 +406,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						else:
 							# Update visual display for living enemies
 							_update_entity_visuals(present_tp, entity)
-						# Sync to backwards-compatible state
-						present_tp.state = present_tp.get_state_dict()
+						# EntityData is source of truth - no state sync needed
 						break
 				
 				Events.future_recalculation_requested.emit()
@@ -446,8 +436,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					entity2.grid_col = temp_col
 					print("Swapped ", entity1.entity_name, " and ", entity2.entity_name)
 
-					# Sync to backwards-compatible state
-					present_tp.state = present_tp.get_state_dict()
+					# EntityData is source of truth - no state sync needed
 
 					# Recalculate targets since positions changed
 					TargetCalculator.calculate_targets(present_tp)
@@ -476,8 +465,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						print("Redirected ", entity.entity_name, " to attack ", target_name)
 						break
 				
-				# Sync to backwards-compatible state
-				future_tp.state = future_tp.get_state_dict()
+				# EntityData is source of truth - no state sync needed
 
 				# DON'T recalculate targets - we just manually set the redirect!
 				# TargetCalculator.calculate_targets() would overwrite our manual redirect
@@ -528,8 +516,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 						else:
 							# Update visual display for living enemies
 							_update_entity_visuals(present_tp, present_entity)
-						# Sync to backwards-compatible state
-						present_tp.state = present_tp.get_state_dict()
+						# EntityData is source of truth - no state sync needed
 						# Recalculate future since enemy HP changed
 						Events.future_recalculation_requested.emit()
 					else:
@@ -598,9 +585,7 @@ func apply_card_effect_targeted(card_data: Dictionary, targets: Array) -> void:
 					print("  ✅ Enemy removed from PAST, conscripted copy added to PRESENT at (", conscripted_enemy.grid_row, ", ", conscripted_enemy.grid_col, ")")
 					print("  ", conscripted_enemy.entity_name, " now fights for you!")
 
-					# Sync to backwards-compatible state
-					present_tp.state = present_tp.get_state_dict()
-					past_tp.state = past_tp.get_state_dict()
+					# EntityData is source of truth - no state sync needed
 
 					# Recalculate targets so conscripted enemy attacks enemies
 					TargetCalculator.calculate_targets(present_tp)
