@@ -262,10 +262,11 @@ func _enable_all_input() -> void:
 	# Re-enable panel interaction based on z_index
 	_update_panel_mouse_filters()
 
-	# Re-enable panels' mouse filters AND grid interactivity
+	# Re-enable panels' mouse filters
+	# NOTE: Don't override grid_interactive here - _update_panel_mouse_filters already set it correctly based on z_index
 	for panel in timeline_panels:
-		panel.mouse_filter = Control.MOUSE_FILTER_PASS
-		panel.set_grid_interactive(true)  # Re-enable grid cell clicks
+		# Use STOP instead of PASS so Area2D grid cells can receive mouse events
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Re-enable entity interaction (targeting system will handle this)
 	# Entities will be re-enabled by targeting system when needed
