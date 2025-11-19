@@ -270,21 +270,42 @@ func ensure_real_future_initialized(source_panel) -> void:
 		# Update entity stats from newly recalculated FUTURE while preserving modifications
 		print("📍 REAL_FUTURE updating entity stats from recalculated FUTURE...")
 
-		for real_entity in real_future_entities:
-			# Find corresponding entity in new FUTURE by unique_id
-			for future_entity in source_panel.entity_data_list:
-				if future_entity.unique_id == real_entity.unique_id:
-					# Update simulation state (HP, position, targets)
-					real_entity.hp = future_entity.hp
-					real_entity.max_hp = future_entity.max_hp
-					real_entity.grid_row = future_entity.grid_row
-					real_entity.grid_col = future_entity.grid_col
-					real_entity.attack_target_id = future_entity.attack_target_id
-					# DON'T update: damage (BOOST_DAMAGE modifications)
-					# DON'T update: will_miss (CHAOS_INJECTION modifications)
-					break
+		var new_entities = []
 
-		print("  ✅ REAL_FUTURE entity stats updated")
+		# Build set of existing unique_ids for fast lookup
+		var existing_ids = {}
+		for real_entity in real_future_entities:
+			existing_ids[real_entity.unique_id] = true
+
+		# Process each future entity
+		for future_entity in source_panel.entity_data_list:
+			if not future_entity.is_alive():
+				continue  # Skip dead entities
+
+			if existing_ids.has(future_entity.unique_id):
+				# Entity exists in REAL_FUTURE - update its stats
+				for real_entity in real_future_entities:
+					if real_entity.unique_id == future_entity.unique_id:
+						# Update simulation state (HP, position, targets)
+						real_entity.hp = future_entity.hp
+						real_entity.max_hp = future_entity.max_hp
+						real_entity.grid_row = future_entity.grid_row
+						real_entity.grid_col = future_entity.grid_col
+						real_entity.attack_target_id = future_entity.attack_target_id
+						# DON'T update: damage (BOOST_DAMAGE modifications)
+						# DON'T update: will_miss (CHAOS_INJECTION modifications)
+						break
+			else:
+				# Entity is NEW (e.g., revived enemy) - add to new_entities list
+				print("  🆕 New entity detected: ", future_entity.unique_id)
+				new_entities.append(future_entity.duplicate_entity())
+
+		# Now safely add all new entities to REAL_FUTURE
+		for new_entity in new_entities:
+			real_future_entities.append(new_entity)
+			print("  ✅ Added new entity to REAL_FUTURE: ", new_entity.unique_id)
+
+		print("  ✅ REAL_FUTURE updated (", real_future_entities.size(), " total entities)")
 		return  # Already initialized, just updated
 
 	# Initialize from source panel (typically FUTURE), excluding dead entities

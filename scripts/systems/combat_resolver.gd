@@ -26,7 +26,7 @@ const ATTACK_OFFSET = 50.0
 
 ## Main entry point for combat resolution
 ## Orchestrates the full combat sequence on the Present panel
-func execute_combat(present_panel: Panel) -> void:
+func execute_combat(present_panel: Panel, attacking_team_is_enemy: bool) -> void:
 	"""Main combat orchestrator - simplified target-based version"""
 	print("CombatResolver: Starting combat...")
 	Events.combat_started.emit()
@@ -52,11 +52,11 @@ func execute_combat(present_panel: Panel) -> void:
 		return
 
 	# Phase 1: Player team attacks (is_enemy = false)
-	await _execute_team_attacks(present_panel, false)
+	await _execute_team_attacks(present_panel, attacking_team_is_enemy)
 	await get_tree().create_timer(0.2).timeout
 
 	# Phase 2: Enemy team attacks (is_enemy = true)
-	await _execute_team_attacks(present_panel, true)
+	# await _execute_team_attacks(present_panel, true)
 
 	Events.combat_ended.emit()
 	print("CombatResolver: Combat complete")
