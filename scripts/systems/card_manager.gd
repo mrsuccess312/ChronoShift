@@ -785,7 +785,7 @@ func _find_entity_by_name(panel, entity_name: String):
 	if not panel or not is_instance_valid(panel):
 		return null
 
-	for entity in panel.entities:
+	for entity in panel.entity_nodes:
 		if entity.entity_data.get("name", "") == entity_name:
 			return entity
 	return null
@@ -796,7 +796,7 @@ func _find_player_entity(panel):
 	if not panel or not is_instance_valid(panel):
 		return null
 
-	for entity in panel.entities:
+	for entity in panel.entity_nodes:
 		if entity.is_player and not entity.entity_data.get("is_twin", false):
 			return entity
 	return null

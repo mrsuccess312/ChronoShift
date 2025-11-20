@@ -219,7 +219,7 @@ func _highlight_valid_targets() -> void:
 	for panel in timeline_panels:
 		# Check if this panel's timeline is valid for targeting
 		if panel.timeline_type in valid_target_timelines:
-			for entity in panel.entities:
+			for entity in panel.entity_nodes:
 				if is_instance_valid(entity) and not entity.is_player:
 					entity.show_as_valid_target()
 
@@ -230,7 +230,7 @@ func _highlight_valid_targets() -> void:
 ## Clear all target highlights
 func _clear_all_highlights() -> void:
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if is_instance_valid(entity):
 				entity.clear_target_visuals()
 		panel.clear_all_highlights()
@@ -241,7 +241,7 @@ func _enable_entity_targeting() -> void:
 	# Enable targeting on all entities across all timelines
 	# (only highlighted ones will be visibly clickable)
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if is_instance_valid(entity) and not entity.is_player:
 				entity.enable_targeting(self)
 
@@ -249,7 +249,7 @@ func _enable_entity_targeting() -> void:
 ## Disable click handlers on entities
 func _disable_entity_targeting() -> void:
 	for panel in timeline_panels:
-		for entity in panel.entities:
+		for entity in panel.entity_nodes:
 			if is_instance_valid(entity):
 				entity.disable_targeting()
 
