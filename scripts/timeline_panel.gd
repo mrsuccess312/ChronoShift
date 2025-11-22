@@ -327,7 +327,7 @@ func clear_entities():
 		if entity and is_instance_valid(entity):
 			entity.queue_free()
 	entity_nodes.clear()
-	entities.clear()  # Clear backwards-compatible array too
+	# No longer using backwards-compatible entities array
 
 func clear_arrows():
 	"""Remove all arrow nodes from panel"""
@@ -440,116 +440,15 @@ func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 
 	return -curve_strength if direction.x < 0 else curve_strength
 
-# ===== BACKWARDS COMPATIBILITY HELPERS (TEMPORARY) =====
-
-func get_state_dict() -> Dictionary:
-	"""TEMPORARY: Convert EntityData back to Dictionary for compatibility"""
-	var player_entities = get_player_entities()
-	var enemy_entities = get_enemy_entities()
-
-	var state = {}
-
-	# Separate player-team entities into real player, twin, and conscripted
-	var real_player = null
-	var twin_entity = null
-	var conscripted_entities = []
-
-	for entity in player_entities:
-		if entity.is_twin:
-			twin_entity = entity
-		elif entity.is_conscripted:
-			conscripted_entities.append(entity)
-		else:
-			real_player = entity
-
-	# Add real player if exists
-	if real_player:
-		state["player"] = {
-			"name": real_player.entity_name,
-			"hp": real_player.hp,
-			"max_hp": real_player.max_hp,
-			"damage": real_player.damage,
-			"unique_id": real_player.unique_id,
-			"is_twin": false,
-			"is_conscripted": false,
-			"is_conscripted_enemy": false
-		}
-
-	# Add twin if exists
-	if twin_entity:
-		state["twin"] = {
-			"name": twin_entity.entity_name,
-			"hp": twin_entity.hp,
-			"max_hp": twin_entity.max_hp,
-			"damage": twin_entity.damage,
-			"unique_id": twin_entity.unique_id,
-			"is_twin": true,
-			"is_conscripted": false,
-			"is_conscripted_enemy": false
-		}
-
-	# Add conscripted enemies to enemies array (they render as enemies but fight for you)
-	state["enemies"] = []
-
-	# Add conscripted entities first
-	for conscripted in conscripted_entities:
-		state["enemies"].append({
-			"name": conscripted.entity_name,
-			"hp": conscripted.hp,
-			"max_hp": conscripted.max_hp,
-			"damage": conscripted.damage,
-			"unique_id": conscripted.unique_id,
-			"is_twin": false,
-			"is_conscripted": true,
-			"is_conscripted_enemy": true
-		})
-
-	# Add real enemies
-	for enemy in enemy_entities:
-		state["enemies"].append({
-			"name": enemy.entity_name,
-			"hp": enemy.hp,
-			"max_hp": enemy.max_hp,
-			"damage": enemy.damage,
-			"unique_id": enemy.unique_id,
-			"is_twin": enemy.is_twin,
-			"is_conscripted": false,
-			"is_conscripted_enemy": false
-		})
-
-	return state
-
-func load_from_state_dict(state: Dictionary):
-	"""TEMPORARY: Load entities from old Dictionary format"""
-	clear_all_entities()
-
-	# Load player
-	if state.has("player"):
-		var player_dict = state["player"]
-		var player = EntityData.create_player()
-		player.entity_name = player_dict.get("name", "Chronomancer")
-		player.hp = player_dict.get("hp", 100)
-		player.max_hp = player_dict.get("max_hp", 100)
-		player.damage = player_dict.get("damage", 15)
-
-		# Place at default player position
-		var player_pos = get_grid_position_for_entity(0, true, state.get("enemies", []).size())
-		add_entity(player, player_pos.x, player_pos.y)
-
-	# Load enemies
-	if state.has("enemies"):
-		var enemy_count = state["enemies"].size()
-		for i in range(enemy_count):
-			var enemy_dict = state["enemies"][i]
-			var enemy = EntityData.create_enemy(
-				enemy_dict.get("name", "Enemy"),
-				enemy_dict.get("hp", 50),
-				enemy_dict.get("damage", 10)
-			)
-
-			# Place at grid position
-			var enemy_pos = get_grid_position_for_entity(i, false, enemy_count)
-			add_entity(enemy, enemy_pos.x, enemy_pos.y)
+# ===== BACKWARDS COMPATIBILITY - REMOVED =====
+# These functions have been removed as EntityData is now the sole source of truth.
+# The refactored architecture no longer uses state dictionaries.
+#
+# Previously:
+# - get_state_dict() -> Dictionary
+# - load_from_state_dict(state: Dictionary)
+#
+# Now: Use entity_data_list (Array[EntityData]) directly
 
 # ===== GRID SYSTEM =====
 
