@@ -55,8 +55,9 @@ func setup(data: Dictionary, player: bool = false, timeline: String = "present")
 	is_player = player
 	timeline_type = timeline
 
-	# Setup sprite type based on entity type (must happen after is_player is set)
-	_setup_sprite_display()
+	# Setup sprite type if nodes are ready (otherwise will be called in _ready)
+	if animated_sprite != null:
+		_setup_sprite_display()
 
 func _ready():
 	"""Called when node enters scene tree"""
@@ -66,6 +67,9 @@ func _ready():
 	# Connect sprite input for targeting
 	if sprite:
 		sprite.gui_input.connect(_on_sprite_gui_input)
+
+	# Setup sprite type based on entity type (in case setup() was called before _ready)
+	_setup_sprite_display()
 
 	# Update visuals
 	update_display()
