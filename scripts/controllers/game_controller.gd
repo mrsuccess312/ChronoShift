@@ -345,6 +345,9 @@ func _initialize_game() -> void:
 	_update_timer_display()
 
 	# Wait for layout to process so grid cells have correct positions
+	# Multiple frames needed: carousel positioning, panel scaling, grid layout
+	await get_tree().process_frame
+	await get_tree().process_frame
 	await get_tree().process_frame
 
 	# Re-position all entities now that grid cells are laid out
@@ -1155,6 +1158,8 @@ func _reposition_all_entities() -> void:
 		if not panel or not panel.battle_grid:
 			continue
 
+		print("  Panel: ", panel.timeline_type)
+
 		# Reposition each entity in this panel
 		for entity_node in panel.entity_nodes:
 			if not entity_node or not entity_node.entity_data:
@@ -1167,6 +1172,7 @@ func _reposition_all_entities() -> void:
 			if grid_col >= 0 and grid_row >= 0:
 				# Update position to current cell center
 				var global_pos = panel.get_cell_center_position(grid_row, grid_col)
+				print("    Entity at (row=%d, col=%d) → global_pos=%v" % [grid_row, grid_col, global_pos])
 				entity_node.global_position = global_pos
 
 	print("  ✅ All entities repositioned")
