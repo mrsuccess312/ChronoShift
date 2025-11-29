@@ -178,15 +178,20 @@ func clear_highlights() -> void:
 	"""Reset all cells to their default background color (deprecated - use reset_all_states instead)"""
 	for cell in cells:
 		if cell and cell.style_box:
-			cell.style_box.bg_color = cell.state_colors[GridCell.CellState.NORMAL]
+			cell.style_box.bg_color = cell.state_colors[cell.CellState.NORMAL]
 
-func set_cell_state(x: int, y: int, state: GridCell.CellState) -> void:
+func set_cell_state(x: int, y: int, state: int) -> void:
 	"""Set the visual state of a specific cell
 
 	Args:
 		x: Column index (0 to grid_width-1)
 		y: Row index (0 to grid_height-1)
-		state: The CellState to apply (NORMAL, HOVERED, SELECTED, OCCUPIED, TARGETED)
+		state: The CellState to apply (GridCell.CellState enum value)
+			- GridCell.CellState.NORMAL
+			- GridCell.CellState.HOVERED
+			- GridCell.CellState.SELECTED
+			- GridCell.CellState.OCCUPIED
+			- GridCell.CellState.TARGETED
 
 	Example:
 		set_cell_state(2, 3, GridCell.CellState.SELECTED)  # Mark cell as selected
