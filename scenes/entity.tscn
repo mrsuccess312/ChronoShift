@@ -6,6 +6,14 @@
 [node name="Entity" type="Node2D"]
 script = ExtResource("1_7rtaj")
 
+[node name="Shadow" type="ColorRect" parent="."]
+offset_left = -30.0
+offset_top = 40.0
+offset_right = 30.0
+offset_bottom = 50.0
+mouse_filter = 2
+color = Color(0, 0, 0, 0.3)
+
 [node name="Sprite" type="ColorRect" parent="."]
 offset_left = -36.0
 offset_top = -36.0
@@ -17,6 +25,15 @@ color = Color(0.2901961, 0.87058824, 0.5019608, 1)
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 visible = false
 scale = Vector2(0.28, 0.28)
+
+[node name="Glow" type="PointLight2D" parent="."]
+enabled = true
+color = Color(1, 0.95, 0.8, 1)
+energy = 0.5
+blend_mode = 0
+range_item_cull_mask = 2
+shadow_enabled = false
+texture_scale = 1.5
 
 [node name="HPLabel" type="Label" parent="."]
 offset_left = -30.0

@@ -6,8 +6,10 @@ var is_player = false
 var timeline_type = "present"
 
 # References to child nodes
+@onready var shadow = $Shadow
 @onready var sprite = $Sprite
 @onready var animated_sprite = $AnimatedSprite2D
+@onready var glow = $Glow
 @onready var hp_label = $HPLabel
 @onready var damage_label = $DamageLabel
 @onready var attack_sound = $AttackSound
@@ -17,6 +19,10 @@ var is_mouse_over = false
 
 # Original position (for hit reactions)
 var original_position = Vector2.ZERO
+
+# Floating animation
+var float_offset = 0.0  # Current vertical offset from floating
+var base_y_position = 0.0  # Base Y position before floating
 
 # Targeting system
 var is_targetable = false  # Can this entity be targeted right now?
@@ -74,6 +80,12 @@ func _ready():
 	# Update visuals
 	update_display()
 
+	# Start floating animation for 3D hover effect
+	_start_floating_animation()
+
+	# Start glow animation for shiny effect
+	_start_glow_animation()
+
 func _on_sprite_gui_input(event: InputEvent):
 	"""Handle mouse clicks on sprite for targeting"""
 	if not is_targetable:
@@ -101,6 +113,100 @@ func _setup_sprite_display():
 		# Enemies use ColorRect
 		animated_sprite.visible = false
 		sprite.visible = true
+
+func _start_floating_animation():
+	"""Create a gentle floating/hovering animation with dynamic shadow"""
+	if not shadow:
+		return
+
+	# Store base position
+	base_y_position = position.y
+
+	# Floating parameters
+	var float_height = 4.0  # How many pixels to float up/down
+	var float_speed = 1.8  # Duration of one bob cycle (seconds)
+	var rotation_angle = 2.0  # Degrees of rotation wobble
+
+	# Create looping tween for vertical bobbing
+	var bob_tween = create_tween().set_loops()
+	bob_tween.set_parallel(true)  # Run all animations in parallel
+
+	# Gentle up movement
+	bob_tween.tween_property(self, "float_offset", -float_height, float_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# Gentle down movement
+	bob_tween.chain().tween_property(self, "float_offset", 0.0, float_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# Subtle rotation wobble (left tilt)
+	bob_tween.tween_property(self, "rotation_degrees", rotation_angle, float_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# Subtle rotation wobble (right tilt)
+	bob_tween.chain().tween_property(self, "rotation_degrees", -rotation_angle, float_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	bob_tween.chain().tween_property(self, "rotation_degrees", 0.0, float_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _start_glow_animation():
+	"""Create a subtle pulsing glow effect for shine"""
+	if not glow:
+		return
+
+	# Glow pulsing parameters
+	var min_energy = 0.4
+	var max_energy = 0.7
+	var pulse_speed = 2.5  # Seconds for full pulse cycle
+
+	# Create looping tween for glow pulse
+	var glow_tween = create_tween().set_loops()
+
+	# Brighten
+	glow_tween.tween_property(glow, "energy", max_energy, pulse_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	# Dim
+	glow_tween.tween_property(glow, "energy", min_energy, pulse_speed / 2.0) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+func _process(_delta):
+	"""Update shadow based on float height and check for mouse hover"""
+	# Update shadow dynamically based on float height
+	if shadow and float_offset != 0:
+		# As entity floats up (negative offset), shadow gets smaller and fainter
+		var float_ratio = abs(float_offset) / 4.0  # 0.0 to 1.0
+		shadow.scale = Vector2(1.0 - float_ratio * 0.3, 1.0)  # Shrink horizontally when higher
+		shadow.modulate.a = 0.3 - float_ratio * 0.15  # Fade when higher
+
+	# Apply float offset to position
+	if float_offset != 0:
+		position.y = base_y_position + float_offset
+
+	# Original mouse hover logic (only for enemies in Past/Future)
+	# Only check for enemies in Past/Future timelines
+	if is_player or timeline_type == "present":
+		return
+
+	# Get mouse position in viewport coordinates
+	var mouse_pos = get_viewport().get_mouse_position()
+
+	# Get hitbox global rect (72x72, centered on entity)
+	var global_pos = global_position
+	var hitbox_rect = Rect2(global_pos - Vector2(36, 36), Vector2(72, 72))
+
+	# Check if mouse is inside hitbox
+	var was_over = is_mouse_over
+	is_mouse_over = hitbox_rect.has_point(mouse_pos)
+
+	# Trigger events on state change
+	if is_mouse_over and not was_over:
+		# Mouse just entered
+		damage_label.visible = true
+	elif not is_mouse_over and was_over:
+		# Mouse just exited
+		damage_label.visible = false
 
 func update_display():
 	"""Update visual elements based on entity data"""
