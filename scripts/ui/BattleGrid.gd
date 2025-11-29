@@ -161,6 +161,9 @@ func create_cells() -> void:
 			# Instantiate a new cell
 			var cell = GRID_CELL_SCENE.instantiate() as GridCell
 
+			# Set cell size to match CELL_SIZE constant
+			cell.custom_minimum_size = Vector2(CELL_SIZE, CELL_SIZE)
+
 			# Set grid position
 			cell.set_grid_position(x, y)
 
