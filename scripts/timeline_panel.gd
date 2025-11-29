@@ -156,8 +156,8 @@ func update_cell_hover_colors():
 		return
 
 	var hover_color = get_timeline_hover_color()
-	for row in range(GridConfig.GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GridConfig.GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.set_hover_color(hover_color)
