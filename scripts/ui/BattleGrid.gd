@@ -291,6 +291,19 @@ func reset_all_states() -> void:
 		if cell:
 			cell.reset_state()
 
+func set_interactive(enabled: bool) -> void:
+	"""Enable or disable grid cell interactivity
+
+	Args:
+		enabled: If true, cells can receive mouse input. If false, cells are non-interactive.
+
+	This is useful for disabling grid interaction during carousel animations
+	or when the timeline panel is not the active focus.
+	"""
+	for cell in cells:
+		if cell:
+			cell.mouse_filter = Control.MOUSE_FILTER_STOP if enabled else Control.MOUSE_FILTER_IGNORE
+
 func _on_cell_clicked(x: int, y: int) -> void:
 	"""Handle cell click events and re-emit as grid signal"""
 	print("BattleGrid: Cell clicked at (%d, %d)" % [x, y])

@@ -772,7 +772,7 @@ func _create_timeline_entities(tp: Panel) -> void:
 		return
 
 	# Special handling for present timeline - position entities on BattleGrid
-	if tp.timeline_type == "present" and present_grid and entity_layer:
+	if tp.timeline_type == "present" and tp.battle_grid and entity_layer:
 		_create_battlegrid_entities(tp)
 		return
 
