@@ -136,12 +136,12 @@ func _setup_carousel() -> void:
 
 	# Define carousel positions (extracted from game_manager.gd)
 	carousel_positions = [
-		{ "position": Vector2(0, 150), "scale": Vector2(0.6, 0.6), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
-		{ "position": Vector2(136, 125), "scale": Vector2(0.75, 0.75), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
-		{ "position": Vector2(660, 90), "scale": Vector2(1.0, 1.0), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 2 },
-		{ "position": Vector2(1184, 125), "scale": Vector2(0.75, 0.75), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
-		{ "position": Vector2(1320, 150), "scale": Vector2(0.6, 0.6), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
-		{ "position": Vector2(1300, 175), "scale": Vector2(0.5, 0.5), "modulate": Color(1.0, 1.0, 1.0, 0.7), "z_index": -1 }
+		{ "position": Vector2(0, 150), "scale": Vector2(0.4, 0.4), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
+		{ "position": Vector2(196, 125), "scale": Vector2(0.65, 0.65), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
+		{ "position": Vector2(660, 90), "scale": Vector2(0.8, 0.8), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 2 },
+		{ "position": Vector2(1124, 125), "scale": Vector2(0.65, 0.65), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
+		{ "position": Vector2(1320, 150), "scale": Vector2(0.4, 0.4), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
+		{ "position": Vector2(1300, 175), "scale": Vector2(0.3, 0.3), "modulate": Color(1.0, 1.0, 1.0, 0.7), "z_index": -1 }
 	]
 
 	# Create 6 timeline panel instances
