@@ -785,6 +785,8 @@ func _create_timeline_entities(tp: Panel) -> void:
 	if tp == null or tp.entity_data_list.size() == 0:
 		return
 
+	print("🎨 Creating entities for ", tp.timeline_type, " timeline")
+
 	# Create visual nodes for each EntityData (all timelines use the same approach now)
 	for entity_data in tp.entity_data_list:
 		var entity_node = ENTITY_SCENE.instantiate()
@@ -800,6 +802,9 @@ func _create_timeline_entities(tp: Panel) -> void:
 		# Position entity at grid location using panel's internal BattleGrid
 		# get_cell_center_position returns global coordinates, so use global_position
 		var global_pos = tp.get_cell_center_position(entity_data.grid_row, entity_data.grid_col)
+		print("  Entity '%s' stored at (row=%d, col=%d) → initial global_pos=%v" % [
+			entity_data.entity_name, entity_data.grid_row, entity_data.grid_col, global_pos
+		])
 		entity_node.global_position = global_pos
 
 		# Gray out dead entities in Future timeline
