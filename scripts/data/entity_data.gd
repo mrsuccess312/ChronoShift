@@ -140,6 +140,8 @@ func to_dict() -> Dictionary:
 		"target": attack_target_id,
 		"will_miss": will_miss,
 		"position": Vector2i(grid_row, grid_col),
+		"grid_row": grid_row,  # Add explicit grid_row for positioning code
+		"grid_col": grid_col,  # Add explicit grid_col for positioning code
 		"is_twin": is_twin,
 		"is_conscripted": is_conscripted,
 		"is_conscripted_enemy": is_conscripted  # Backwards compatibility for visual nodes
