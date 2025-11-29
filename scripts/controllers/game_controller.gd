@@ -45,6 +45,7 @@ var enable_panel_hover: bool = true
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
 @onready var camera = $Camera2D
 @onready var ui_root = $UIRoot
+@onready var battle_grid: BattleGrid = $UIRoot/BattleGrid
 
 # Deck containers
 @onready var past_deck_container = $UIRoot/DeckContainers/PastDeckContainer
@@ -74,6 +75,11 @@ func _ready() -> void:
 
 	# Connect UI
 	play_button.pressed.connect(_on_play_button_pressed)
+
+	# Connect BattleGrid signals
+	if battle_grid:
+		battle_grid.grid_cell_clicked.connect(_on_grid_cell_clicked)
+		print("  BattleGrid connected")
 
 	print("\n✅ GameController ready!\n")
 
@@ -342,6 +348,9 @@ func _initialize_game() -> void:
 
 	# Initialize timer display
 	_update_timer_display()
+
+	# Update BattleGrid to show initial entity positions
+	update_grid_visual()
 
 	print("✅ Game initialized with EntityData\n")
 
@@ -949,6 +958,9 @@ func _on_combat_ended() -> void:
 		if panel and is_instance_valid(panel):
 			panel.set_grid_interactive(true)
 
+	# Update BattleGrid to reflect post-combat state
+	update_grid_visual()
+
 
 func _on_damage_dealt(target: Node2D, damage: int) -> void:
 	"""Handle damage event - update entity visuals"""
@@ -987,6 +999,9 @@ func _on_card_played(card_data: Dictionary) -> void:
 	_update_all_timeline_displays()
 	_show_timeline_arrows()  # Show arrows including any redirected ones
 
+	# Update BattleGrid if card affected entity positions
+	update_grid_visual()
+
 
 func _on_future_recalculation_requested() -> void:
 	"""Handle request to recalculate future (e.g., after enemy_swap)"""
@@ -1024,6 +1039,80 @@ func _update_damage_display() -> void:
 			if not entity_data.is_enemy:
 				damage_label.text = str(entity_data.damage)
 				break
+
+
+# ============================================================================
+# BATTLE GRID INTEGRATION
+# ============================================================================
+
+func update_grid_visual() -> void:
+	"""Update BattleGrid visual states based on present timeline entity positions
+
+	This function synchronizes the Fluent Design grid with the game state by:
+	- Resetting all grid cells to NORMAL state
+	- Reading entity positions from the present timeline panel
+	- Marking occupied cells with the OCCUPIED state
+	- Handling dynamic grid sizes from grid_config
+	"""
+	if not battle_grid:
+		return
+
+	# Reset all cells to normal state
+	battle_grid.reset_all_states()
+
+	# Get the present timeline panel (index 2 in carousel)
+	var present_panel = _get_timeline_panel("present")
+	if not present_panel:
+		push_warning("update_grid_visual: Could not find present timeline panel")
+		return
+
+	# Iterate through the present timeline's cell_entities grid
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
+			# Check if there's an entity at this position
+			if row < present_panel.cell_entities.size():
+				var row_array = present_panel.cell_entities[row]
+				if col < row_array.size() and row_array[col] != null:
+					# Entity exists at this position - mark as occupied
+					battle_grid.set_cell_state(col, row, GridCell.CellState.OCCUPIED)
+
+	print("  🎯 BattleGrid updated - %d rows x %d cols" % [GridConfig.GRID_ROWS, GridConfig.GRID_COLS])
+
+
+func _on_grid_cell_clicked(x: int, y: int) -> void:
+	"""Handle grid cell clicks from BattleGrid
+
+	Args:
+		x: Column index (0-based)
+		y: Row index (0-based)
+
+	TODO: Integrate with targeting system for:
+	- Selecting entity targets for abilities
+	- Movement/positioning mechanics
+	- Card targeting interactions
+	"""
+	print("  🖱️ Grid cell clicked: (%d, %d)" % [x, y])
+
+	# Get the present panel to check what's at this position
+	var present_panel = _get_timeline_panel("present")
+	if present_panel and y < present_panel.cell_entities.size():
+		var row_array = present_panel.cell_entities[y]
+		if x < row_array.size():
+			var entity_data = row_array[x]
+			if entity_data:
+				print("    Entity at position: %s (HP: %d/%d)" % [
+					entity_data.entity_name,
+					entity_data.hp,
+					entity_data.max_hp
+				])
+			else:
+				print("    Empty cell")
+
+	# TODO: Add targeting system integration here
+	# Example future usage:
+	# if targeting_system.is_targeting_mode:
+	#     targeting_system.select_target(x, y)
+	#     battle_grid.set_cell_state(x, y, GridCell.CellState.TARGETED)
 
 
 func _hide_ui_for_carousel() -> void:
