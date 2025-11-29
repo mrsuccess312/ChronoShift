@@ -344,6 +344,12 @@ func _initialize_game() -> void:
 	# Initialize timer display
 	_update_timer_display()
 
+	# Wait for layout to process so grid cells have correct positions
+	await get_tree().process_frame
+
+	# Re-position all entities now that grid cells are laid out
+	_reposition_all_entities()
+
 	# Update all BattleGrids to show initial entity positions
 	update_all_grids()
 
@@ -398,6 +404,11 @@ func _execute_complete_turn() -> void:
 	print("📋 Recreating entities after carousel...")
 	_create_timeline_entities(timeline_panels[1])  # Past
 	_create_timeline_entities(timeline_panels[2])  # Present
+
+	# Wait for layout and reposition entities
+	await get_tree().process_frame
+	_reposition_all_entities()
+
 	print("  ✅ Entities recreated")
 
 	# Phase 2: Post-carousel - show labels on new Present
@@ -1129,6 +1140,36 @@ func _on_grid_cell_clicked(x: int, y: int, timeline_type: String = "present") ->
 	# if targeting_system.is_targeting_mode:
 	#     targeting_system.select_target(x, y, timeline_type)
 	#     get_grid_by_type(timeline_type).set_cell_state(x, y, GridCell.CellState.TARGETED)
+
+
+func _reposition_all_entities() -> void:
+	"""Reposition all entities in all timeline panels after grid layout is ready
+
+	This function is called after waiting for the scene tree to process layout,
+	ensuring that grid cells have their correct global positions before entities
+	are positioned on them.
+	"""
+	print("📍 Repositioning all entities after grid layout...")
+
+	for panel in timeline_panels:
+		if not panel or not panel.battle_grid:
+			continue
+
+		# Reposition each entity in this panel
+		for entity_node in panel.entity_nodes:
+			if not entity_node or not entity_node.entity_data:
+				continue
+
+			# Get grid position from entity data
+			var grid_col = entity_node.entity_data.get("grid_col", -1)
+			var grid_row = entity_node.entity_data.get("grid_row", -1)
+
+			if grid_col >= 0 and grid_row >= 0:
+				# Update position to current cell center
+				var global_pos = panel.get_cell_center_position(grid_row, grid_col)
+				entity_node.global_position = global_pos
+
+	print("  ✅ All entities repositioned")
 
 
 func _hide_ui_for_carousel() -> void:
