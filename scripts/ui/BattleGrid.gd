@@ -163,7 +163,7 @@ func get_cell(x: int, y: int) -> GridCell:
 	return null
 
 func highlight_cell(x: int, y: int, color: Color) -> void:
-	"""Change a cell's background color
+	"""Change a cell's background color (deprecated - use set_cell_state instead)
 
 	Args:
 		x: Column index
@@ -175,10 +175,37 @@ func highlight_cell(x: int, y: int, color: Color) -> void:
 		cell.style_box.bg_color = color
 
 func clear_highlights() -> void:
-	"""Reset all cells to their default background color"""
+	"""Reset all cells to their default background color (deprecated - use reset_all_states instead)"""
 	for cell in cells:
 		if cell and cell.style_box:
-			cell.style_box.bg_color = cell.default_bg_color
+			cell.style_box.bg_color = cell.state_colors[GridCell.CellState.NORMAL]
+
+func set_cell_state(x: int, y: int, state: GridCell.CellState) -> void:
+	"""Set the visual state of a specific cell
+
+	Args:
+		x: Column index (0 to grid_width-1)
+		y: Row index (0 to grid_height-1)
+		state: The CellState to apply (NORMAL, HOVERED, SELECTED, OCCUPIED, TARGETED)
+
+	Example:
+		set_cell_state(2, 3, GridCell.CellState.SELECTED)  # Mark cell as selected
+		set_cell_state(0, 0, GridCell.CellState.OCCUPIED)  # Mark cell as occupied
+		set_cell_state(4, 4, GridCell.CellState.TARGETED)  # Add red border to cell
+	"""
+	var cell = get_cell(x, y)
+	if cell:
+		cell.set_state(state)
+
+func reset_all_states() -> void:
+	"""Reset all cells to NORMAL state
+
+	This clears all visual states (selected, occupied, targeted, etc.)
+	and returns all cells to their default appearance.
+	"""
+	for cell in cells:
+		if cell:
+			cell.reset_state()
 
 func _on_cell_clicked(x: int, y: int) -> void:
 	"""Handle cell click events and re-emit as grid signal"""

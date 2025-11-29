@@ -3,7 +3,16 @@ class_name GridCell
 
 # ===== FLUENT DESIGN GRID CELL =====
 # A reusable UI component for Fluent Design grid systems
-# Features: hover effects, click detection, shadow styling
+# Features: hover effects, click detection, shadow styling, visual states
+
+# Cell visual states
+enum CellState {
+	NORMAL,    # Default light gray
+	HOVERED,   # Slightly brighter
+	SELECTED,  # Blue tint
+	OCCUPIED,  # Yellow tint
+	TARGETED   # Red border
+}
 
 # Signal emitted when this cell is clicked
 signal cell_clicked(grid_x: int, grid_y: int)
@@ -12,9 +21,17 @@ signal cell_clicked(grid_x: int, grid_y: int)
 @export var grid_x: int = 0
 @export var grid_y: int = 0
 
-# Styling properties
-var default_bg_color: Color = Color(0.925, 0.925, 0.925)  # #ECECEC
-var hover_bg_color: Color = Color(0.95, 0.95, 0.95)  # Slightly brighter on hover
+# Current visual state
+var current_state: CellState = CellState.NORMAL
+
+# State colors
+var state_colors = {
+	CellState.NORMAL: Color(0.925, 0.925, 0.925),    # #ECECEC
+	CellState.HOVERED: Color(0.961, 0.961, 0.961),   # #F5F5F5
+	CellState.SELECTED: Color(0.816, 0.910, 1.0),    # #D0E8FF
+	CellState.OCCUPIED: Color(1.0, 0.957, 0.816),    # #FFF4D0
+	CellState.TARGETED: Color(0.925, 0.925, 0.925)   # #ECECEC (border will be red)
+}
 
 # Reference to the StyleBoxFlat (will be set in _ready)
 var style_box: StyleBoxFlat = null
@@ -23,8 +40,32 @@ func _ready():
 	# Create StyleBoxFlat for the panel
 	style_box = StyleBoxFlat.new()
 
-	# Set background color
-	style_box.bg_color = default_bg_color
+	# Set custom minimum size
+	custom_minimum_size = Vector2(80, 80)
+
+	# Connect mouse signals for hover effects
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
+
+	# Initialize to NORMAL state
+	set_state(CellState.NORMAL)
+
+func set_state(new_state: CellState) -> void:
+	"""Set the visual state of the cell
+
+	Args:
+		new_state: The CellState to apply
+	"""
+	current_state = new_state
+
+	if not style_box:
+		return
+
+	# Get the color for this state
+	var bg_color = state_colors.get(new_state, state_colors[CellState.NORMAL])
+
+	# Update background color
+	style_box.bg_color = bg_color
 
 	# Set corner radius for all corners (Fluent Design rounded corners)
 	style_box.corner_radius_top_left = 10
@@ -35,17 +76,28 @@ func _ready():
 	# Enable shadow
 	style_box.shadow_size = 5
 	style_box.shadow_offset = Vector2(0, 3)
-	style_box.shadow_color = Color(0, 0, 0, 0.15)  # Semi-transparent black
+	style_box.shadow_color = Color(0, 0, 0, 0.15)
 
-	# Apply the style to the panel
+	# Handle TARGETED state - add red border
+	if new_state == CellState.TARGETED:
+		style_box.border_width_left = 2
+		style_box.border_width_top = 2
+		style_box.border_width_right = 2
+		style_box.border_width_bottom = 2
+		style_box.border_color = Color(1.0, 0.267, 0.267)  # #FF4444
+	else:
+		# Remove border for other states
+		style_box.border_width_left = 0
+		style_box.border_width_top = 0
+		style_box.border_width_right = 0
+		style_box.border_width_bottom = 0
+
+	# Apply the updated style
 	add_theme_stylebox_override("panel", style_box)
 
-	# Set custom minimum size
-	custom_minimum_size = Vector2(80, 80)
-
-	# Connect mouse signals for hover effects
-	mouse_entered.connect(_on_mouse_entered)
-	mouse_exited.connect(_on_mouse_exited)
+func reset_state() -> void:
+	"""Reset the cell to NORMAL state"""
+	set_state(CellState.NORMAL)
 
 func _gui_input(event: InputEvent) -> void:
 	"""Handle mouse input events on this cell"""
@@ -68,17 +120,17 @@ func set_grid_position(x: int, y: int) -> void:
 
 func _on_mouse_entered() -> void:
 	"""Brighten the cell slightly when mouse hovers over it"""
-	if style_box:
-		# Create a smooth transition to hover color
-		var tween = create_tween()
-		tween.tween_property(style_box, "bg_color", hover_bg_color, 0.15)
+	# Only apply hover effect if in NORMAL state
+	# (don't override SELECTED, OCCUPIED, or TARGETED states)
+	if current_state == CellState.NORMAL:
+		set_state(CellState.HOVERED)
 
 func _on_mouse_exited() -> void:
-	"""Restore original color when mouse leaves"""
-	if style_box:
-		# Smooth transition back to default color
-		var tween = create_tween()
-		tween.tween_property(style_box, "bg_color", default_bg_color, 0.15)
+	"""Restore original state when mouse leaves"""
+	# Only restore to NORMAL if currently HOVERED
+	# (preserve other states)
+	if current_state == CellState.HOVERED:
+		set_state(CellState.NORMAL)
 
 func _play_click_animation() -> void:
 	"""Play a subtle scale animation when clicked"""
