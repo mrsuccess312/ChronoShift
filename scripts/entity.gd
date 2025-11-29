@@ -55,6 +55,9 @@ func setup(data: Dictionary, player: bool = false, timeline: String = "present")
 	is_player = player
 	timeline_type = timeline
 
+	# Setup sprite type based on entity type (must happen after is_player is set)
+	_setup_sprite_display()
+
 func _ready():
 	"""Called when node enters scene tree"""
 	# Store original position for hit reactions
@@ -66,9 +69,6 @@ func _ready():
 
 	# Update visuals
 	update_display()
-
-	# Setup sprite type based on entity type (player vs enemy)
-	_setup_sprite_display()
 
 func _on_sprite_gui_input(event: InputEvent):
 	"""Handle mouse clicks on sprite for targeting"""
@@ -86,9 +86,13 @@ func _setup_sprite_display():
 		animated_sprite.visible = true
 		sprite.visible = false
 
-		# Load player animations and play idle
-		animated_sprite.sprite_frames = load("res://assets/sprites/player/player_animations.tres")
+		# Load player animations if not already loaded in scene
+		if animated_sprite.sprite_frames == null:
+			animated_sprite.sprite_frames = load("res://assets/sprites/player/player_animations.tres")
+
+		# Play idle animation
 		animated_sprite.play("idle")
+		print("Player sprite setup complete - playing idle animation")
 	else:
 		# Enemies use ColorRect
 		animated_sprite.visible = false
