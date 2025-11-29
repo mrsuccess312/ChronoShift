@@ -45,7 +45,9 @@ var enable_panel_hover: bool = true
 @onready var damage_label = $UIRoot/DamageDisplay/DamageLabel
 @onready var camera = $Camera2D
 @onready var ui_root = $UIRoot
-@onready var battle_grid: BattleGrid = $UIRoot/BattleGrid
+@onready var past_grid: BattleGrid = $UIRoot/PastGrid
+@onready var present_grid: BattleGrid = $UIRoot/PresentGrid
+@onready var future_grid: BattleGrid = $UIRoot/FutureGrid
 @onready var entity_layer: Node2D = $EntityLayer
 
 # Deck containers
@@ -77,11 +79,17 @@ func _ready() -> void:
 	# Connect UI
 	play_button.pressed.connect(_on_play_button_pressed)
 
-	# Connect BattleGrid signals
-	if battle_grid:
-		battle_grid.grid_cell_clicked.connect(_on_grid_cell_clicked)
-		battle_grid.grid_layout_changed.connect(reposition_battlegrid_entities)
-		print("  BattleGrid connected")
+	# Connect BattleGrid signals for all three timelines
+	if past_grid:
+		past_grid.grid_cell_clicked.connect(_on_grid_cell_clicked.bind("past"))
+		past_grid.grid_layout_changed.connect(reposition_battlegrid_entities)
+	if present_grid:
+		present_grid.grid_cell_clicked.connect(_on_grid_cell_clicked.bind("present"))
+		present_grid.grid_layout_changed.connect(reposition_battlegrid_entities)
+	if future_grid:
+		future_grid.grid_cell_clicked.connect(_on_grid_cell_clicked.bind("future"))
+		future_grid.grid_layout_changed.connect(reposition_battlegrid_entities)
+	print("  BattleGrids connected (Past, Present, Future)")
 
 	print("\n✅ GameController ready!\n")
 
@@ -351,8 +359,8 @@ func _initialize_game() -> void:
 	# Initialize timer display
 	_update_timer_display()
 
-	# Update BattleGrid to show initial entity positions
-	update_grid_visual()
+	# Update all BattleGrids to show initial entity positions
+	update_all_grids()
 
 	print("✅ Game initialized with EntityData\n")
 
@@ -779,7 +787,7 @@ func _create_timeline_entities(tp: Panel) -> void:
 		return
 
 	# Special handling for present timeline - position entities on BattleGrid
-	if tp.timeline_type == "present" and battle_grid and entity_layer:
+	if tp.timeline_type == "present" and present_grid and entity_layer:
 		_create_battlegrid_entities(tp)
 		return
 
@@ -815,8 +823,8 @@ func _create_battlegrid_entities(tp: Panel) -> void:
 	timeline panel, using the BattleGrid's cell center positions.
 	Entities are added to the EntityLayer for proper z-ordering.
 	"""
-	if not battle_grid or not entity_layer:
-		push_warning("_create_battlegrid_entities: BattleGrid or EntityLayer not available")
+	if not present_grid or not entity_layer:
+		push_warning("_create_battlegrid_entities: PresentGrid or EntityLayer not available")
 		return
 
 	# Clear existing entities from EntityLayer
@@ -832,7 +840,7 @@ func _create_battlegrid_entities(tp: Panel) -> void:
 		entity_node.setup(entity_dict, not entity_data.is_enemy, tp.timeline_type)
 
 		# Position entity at BattleGrid cell center
-		var grid_pos = battle_grid.get_cell_center_position(entity_data.grid_col, entity_data.grid_row)
+		var grid_pos = present_grid.get_cell_center_position(entity_data.grid_col, entity_data.grid_row)
 		entity_node.global_position = grid_pos
 
 		# Add to EntityLayer (not timeline panel)
@@ -843,7 +851,7 @@ func _create_battlegrid_entities(tp: Panel) -> void:
 		entity_node.entity_data = entity_dict
 		entity_node.entity_data["unique_id"] = entity_data.unique_id
 
-	print("  📍 Created %d entities on BattleGrid" % tp.entity_data_list.size())
+	print("  📍 Created %d entities on PresentGrid" % tp.entity_data_list.size())
 
 
 func _create_timeline_arrows(tp: Panel) -> void:
@@ -1003,8 +1011,8 @@ func _on_combat_ended() -> void:
 		if panel and is_instance_valid(panel):
 			panel.set_grid_interactive(true)
 
-	# Update BattleGrid to reflect post-combat state
-	update_grid_visual()
+	# Update all BattleGrids to reflect post-combat state
+	update_all_grids()
 
 
 func _on_damage_dealt(target: Node2D, damage: int) -> void:
@@ -1044,8 +1052,8 @@ func _on_card_played(card_data: Dictionary) -> void:
 	_update_all_timeline_displays()
 	_show_timeline_arrows()  # Show arrows including any redirected ones
 
-	# Update BattleGrid if card affected entity positions
-	update_grid_visual()
+	# Update all BattleGrids if card affected entity positions
+	update_all_grids()
 
 
 func _on_future_recalculation_requested() -> void:
@@ -1090,58 +1098,76 @@ func _update_damage_display() -> void:
 # BATTLE GRID INTEGRATION
 # ============================================================================
 
-func update_grid_visual() -> void:
-	"""Update BattleGrid visual states based on present timeline entity positions
+func update_all_grids() -> void:
+	"""Update all three BattleGrids (Past, Present, Future) to show entity positions
+
+	This function updates all three timeline grids to display their respective states:
+	- Past grid shows historical entity positions
+	- Present grid shows current entity positions
+	- Future grid shows predicted entity positions (REAL_FUTURE)
+
+	All three grids use the same grid_config for consistent dimensions.
+	"""
+	update_grid_visual(past_grid, "past")
+	update_grid_visual(present_grid, "present")
+	update_grid_visual(future_grid, "future")
+	print("  🎯 All BattleGrids updated (Past, Present, Future)")
+
+func update_grid_visual(grid: BattleGrid, timeline_type: String) -> void:
+	"""Update a specific BattleGrid's visual states based on timeline entity positions
+
+	Args:
+		grid: The BattleGrid instance to update
+		timeline_type: Timeline identifier ("past", "present", or "future")
 
 	This function synchronizes the Fluent Design grid with the game state by:
 	- Resetting all grid cells to NORMAL state
-	- Reading entity positions from the present timeline panel
+	- Reading entity positions from the specified timeline panel
 	- Marking occupied cells with the OCCUPIED state
 	- Handling dynamic grid sizes from grid_config
 	"""
-	if not battle_grid:
+	if not grid:
 		return
 
 	# Reset all cells to normal state
-	battle_grid.reset_all_states()
+	grid.reset_all_states()
 
-	# Get the present timeline panel (index 2 in carousel)
-	var present_panel = _get_timeline_panel("present")
-	if not present_panel:
-		push_warning("update_grid_visual: Could not find present timeline panel")
+	# Get the timeline panel for this grid
+	var panel = _get_timeline_panel(timeline_type)
+	if not panel:
+		push_warning("update_grid_visual: Could not find %s timeline panel" % timeline_type)
 		return
 
-	# Iterate through the present timeline's cell_entities grid
+	# Iterate through the timeline's cell_entities grid
 	for row in range(GridConfig.GRID_ROWS):
 		for col in range(GridConfig.GRID_COLS):
 			# Check if there's an entity at this position
-			if row < present_panel.cell_entities.size():
-				var row_array = present_panel.cell_entities[row]
+			if row < panel.cell_entities.size():
+				var row_array = panel.cell_entities[row]
 				if col < row_array.size() and row_array[col] != null:
 					# Entity exists at this position - mark as occupied
-					battle_grid.set_cell_state(col, row, GridCell.CellState.OCCUPIED)
-
-	print("  🎯 BattleGrid updated - %d rows x %d cols" % [GridConfig.GRID_ROWS, GridConfig.GRID_COLS])
+					grid.set_cell_state(col, row, GridCell.CellState.OCCUPIED)
 
 
-func _on_grid_cell_clicked(x: int, y: int) -> void:
-	"""Handle grid cell clicks from BattleGrid
+func _on_grid_cell_clicked(x: int, y: int, timeline_type: String = "present") -> void:
+	"""Handle grid cell clicks from any BattleGrid
 
 	Args:
 		x: Column index (0-based)
 		y: Row index (0-based)
+		timeline_type: Which timeline grid was clicked ("past", "present", "future")
 
 	TODO: Integrate with targeting system for:
 	- Selecting entity targets for abilities
 	- Movement/positioning mechanics
 	- Card targeting interactions
 	"""
-	print("  🖱️ Grid cell clicked: (%d, %d)" % [x, y])
+	print("  🖱️ %s grid cell clicked: (%d, %d)" % [timeline_type.capitalize(), x, y])
 
-	# Get the present panel to check what's at this position
-	var present_panel = _get_timeline_panel("present")
-	if present_panel and y < present_panel.cell_entities.size():
-		var row_array = present_panel.cell_entities[y]
+	# Get the timeline panel to check what's at this position
+	var panel = _get_timeline_panel(timeline_type)
+	if panel and y < panel.cell_entities.size():
+		var row_array = panel.cell_entities[y]
 		if x < row_array.size():
 			var entity_data = row_array[x]
 			if entity_data:
@@ -1156,12 +1182,12 @@ func _on_grid_cell_clicked(x: int, y: int) -> void:
 	# TODO: Add targeting system integration here
 	# Example future usage:
 	# if targeting_system.is_targeting_mode:
-	#     targeting_system.select_target(x, y)
-	#     battle_grid.set_cell_state(x, y, GridCell.CellState.TARGETED)
+	#     targeting_system.select_target(x, y, timeline_type)
+	#     get_grid_by_type(timeline_type).set_cell_state(x, y, GridCell.CellState.TARGETED)
 
 
 func reposition_battlegrid_entities() -> void:
-	"""Reposition all entities on the BattleGrid based on their grid coordinates
+	"""Reposition all entities on the PresentGrid based on their grid coordinates
 
 	This function updates entity positions when:
 	- Grid spacing changes (panel resized)
@@ -1171,7 +1197,7 @@ func reposition_battlegrid_entities() -> void:
 	Iterates through all entities in the EntityLayer and positions them
 	at their corresponding grid cell centers.
 	"""
-	if not battle_grid or not entity_layer:
+	if not present_grid or not entity_layer:
 		return
 
 	# Get the present timeline panel to access entity data
@@ -1190,10 +1216,10 @@ func reposition_battlegrid_entities() -> void:
 
 		if grid_col >= 0 and grid_row >= 0:
 			# Update position to current cell center
-			var grid_pos = battle_grid.get_cell_center_position(grid_col, grid_row)
+			var grid_pos = present_grid.get_cell_center_position(grid_col, grid_row)
 			entity_node.global_position = grid_pos
 
-	print("  📍 Repositioned %d entities on BattleGrid" % entity_layer.get_child_count())
+	print("  📍 Repositioned %d entities on PresentGrid" % entity_layer.get_child_count())
 
 
 func _hide_ui_for_carousel() -> void:

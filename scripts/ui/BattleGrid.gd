@@ -5,6 +5,13 @@ class_name BattleGrid
 # A grid container that uses FIXED cell sizes (80x80) with DYNAMIC spacing
 # Unlike the old system where cell size varied, spacing now adapts to available space
 
+# Timeline type enumeration for visual differentiation
+enum TimelineType {
+	PAST,     # Historical state with sepia tint
+	PRESENT,  # Current state with normal colors
+	FUTURE    # Predicted state with blue tint
+}
+
 # Signal re-emitted when any cell is clicked
 signal grid_cell_clicked(x: int, y: int)
 
@@ -18,6 +25,25 @@ const MIN_SPACING: float = 8.0  # Minimum spacing between cells
 
 # Reference to the GridCell scene
 const GRID_CELL_SCENE = preload("res://scenes/ui/GridCell.tscn")
+
+# Timeline type for this grid (affects color tints)
+@export var timeline_type: TimelineType = TimelineType.PRESENT
+
+# Color tints for different timeline types
+var timeline_colors = {
+	TimelineType.PAST: {
+		"cell_normal": Color(0.925, 0.863, 0.753),    # #ECDCC0 - Sepia tint
+		"panel_bg": Color(0.753, 0.690, 0.627)         # #C0B0A0 - Darker sepia
+	},
+	TimelineType.PRESENT: {
+		"cell_normal": Color(0.925, 0.925, 0.925),     # #ECECEC - Normal gray
+		"panel_bg": Color(0.816, 0.816, 0.816)         # #D0D0D0 - Normal panel
+	},
+	TimelineType.FUTURE: {
+		"cell_normal": Color(0.816, 0.878, 1.0),       # #D0E0FF - Blue tint
+		"panel_bg": Color(0.753, 0.816, 0.941)         # #C0D0F0 - Lighter blue
+	}
+}
 
 # Child nodes
 @onready var cell_container: GridContainer = $CellContainer
@@ -39,6 +65,9 @@ func setup_grid() -> void:
 	grid_width = GridConfig.GRID_COLS
 	grid_height = GridConfig.GRID_ROWS
 
+	# Apply timeline-specific styling to panel background
+	apply_timeline_styling()
+
 	# Configure the GridContainer
 	if cell_container:
 		cell_container.columns = grid_width
@@ -48,6 +77,16 @@ func setup_grid() -> void:
 
 		# Create cells
 		create_cells()
+
+func apply_timeline_styling() -> void:
+	"""Apply color tints based on timeline type"""
+	var colors = timeline_colors.get(timeline_type, timeline_colors[TimelineType.PRESENT])
+
+	# Update panel background color
+	var panel_stylebox = get_theme_stylebox("panel")
+	if panel_stylebox is StyleBoxFlat:
+		var style = panel_stylebox as StyleBoxFlat
+		style.bg_color = colors["panel_bg"]
 
 func calculate_spacing() -> void:
 	"""Calculate dynamic spacing based on panel size and fixed cell dimensions
@@ -114,6 +153,9 @@ func create_cells() -> void:
 	"""Create and populate the grid with GridCell instances"""
 	cells.clear()
 
+	# Get timeline-specific colors
+	var colors = timeline_colors.get(timeline_type, timeline_colors[TimelineType.PRESENT])
+
 	for y in range(grid_height):
 		for x in range(grid_width):
 			# Instantiate a new cell
@@ -124,6 +166,10 @@ func create_cells() -> void:
 
 			# Name it systematically for debugging
 			cell.name = "Cell_%d_%d" % [x, y]
+
+			# Apply timeline-specific color tint to cell
+			# Override the NORMAL state color before the cell initializes
+			cell.state_colors[GridCell.CellState.NORMAL] = colors["cell_normal"]
 
 			# Connect the cell's clicked signal
 			cell.cell_clicked.connect(_on_cell_clicked)
