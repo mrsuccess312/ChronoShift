@@ -30,31 +30,6 @@ var is_highlighted_as_target = false  # Is this a valid target (green glow)?
 var is_selected_as_target = false  # Has this been selected as a target (golden glow)?
 var game_manager_ref = null  # Reference to game manager for callbacks
 
-func _process(_delta):
-	"""Check for mouse hover (only for enemies in Past/Future)"""
-	# Only check for enemies in Past/Future timelines
-	if is_player or timeline_type == "present":
-		return
-	
-	# Get mouse position in viewport coordinates
-	var mouse_pos = get_viewport().get_mouse_position()
-	
-	# Get hitbox global rect (72x72, centered on entity)
-	var global_pos = global_position
-	var hitbox_rect = Rect2(global_pos - Vector2(36, 36), Vector2(72, 72))
-	
-	# Check if mouse is inside hitbox
-	var was_over = is_mouse_over
-	is_mouse_over = hitbox_rect.has_point(mouse_pos)
-	
-	# Trigger events on state change
-	if is_mouse_over and not was_over:
-		# Mouse just entered
-		damage_label.visible = true
-	elif not is_mouse_over and was_over:
-		# Mouse just exited
-		damage_label.visible = false
-
 func setup(data: Dictionary, player: bool = false, timeline: String = "present"):
 	"""Initialize entity with data from game manager"""
 	entity_data = data
