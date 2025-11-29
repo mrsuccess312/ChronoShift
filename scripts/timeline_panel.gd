@@ -4,8 +4,8 @@ extends Panel
 # Self-contained panel with all its data and entities
 # Refactored to use EntityData models instead of Dictionary states
 
-const GRID_CELL_SCENE = preload("res://scenes/grid_cell.tscn")
 const ARROW_SCENE = preload("res://scenes/arrow.tscn")
+const BattleGrid = preload("res://scripts/ui/BattleGrid.gd")
 
 var timeline_type: String = "decorative"  # "past", "present", "future", "decorative"
 
@@ -25,8 +25,7 @@ var arrows: Array = []  # Arrow visual nodes
 
 var slot_index: int = -1  # Current carousel slot position
 
-# Grid system
-var grid_cells: Array = []  # 2D array [row][col] of grid cell nodes
+# Grid system (now delegated to BattleGrid)
 # Grid dimensions now come from GridConfig (configurable)
 
 # Hover animation
@@ -37,15 +36,12 @@ var hover_period: float = 2.5  # 3-4 seconds
 var base_position_y: float = 0.0  # Original Y position
 var current_hover_offset: float = 0.0
 
-@onready var grid_container: Control = $GridContainer
+@onready var battle_grid: Node = $BattleGrid
 @onready var shadow: ColorRect = $Shadow
 
 func _ready():
 	"""Setup grid when panel is added to scene"""
 	print("TimelinePanel _ready() called for ", timeline_type)
-
-	# Dynamically resize panel based on GridConfig
-	_resize_panel_components()
 
 	# Store base position for hover animation
 	base_position_y = position.y
@@ -61,10 +57,27 @@ func _ready():
 			row_array.append(null)  # No entity in cell
 		cell_entities.append(row_array)
 
-	setup_grid()
-	# Update hover colors after grid is set up
-	update_cell_hover_colors()
-	print("TimelinePanel _ready() complete - grid has ", grid_cells.size(), " rows")
+	# Setup BattleGrid with appropriate timeline type
+	if battle_grid:
+		var timeline_type_enum = _get_timeline_type_enum()
+		battle_grid.timeline_type = timeline_type_enum
+		battle_grid.setup_grid()
+		# Connect grid signals
+		battle_grid.grid_cell_clicked.connect(_on_cell_clicked)
+
+	print("TimelinePanel _ready() complete - using BattleGrid")
+
+func _get_timeline_type_enum() -> int:
+	"""Convert string timeline_type to BattleGrid.TimelineType enum"""
+	match timeline_type:
+		"past":
+			return 0  # BattleGrid.TimelineType.PAST
+		"present":
+			return 1  # BattleGrid.TimelineType.PRESENT
+		"future":
+			return 2  # BattleGrid.TimelineType.FUTURE
+		_:
+			return 1  # Default to PRESENT
 
 func _resize_panel_components():
 	"""Dynamically resize panel and child components based on GridConfig"""
@@ -87,10 +100,10 @@ func _resize_panel_components():
 		shadow.offset_right = panel_width + 10.0
 		shadow.offset_bottom = panel_height + 10.0
 
-	# Resize grid container
-	if grid_container:
-		grid_container.set_size(panel_size)
-		grid_container.size = panel_size
+	# Resize BattleGrid to fill panel
+	if battle_grid:
+		battle_grid.set_size(panel_size)
+		battle_grid.size = panel_size
 
 	# Update panel label width
 	var panel_label = get_node_or_null("PanelLabel")
@@ -103,7 +116,9 @@ func initialize(type: String, slot: int):
 	"""Initialize the timeline panel with type and slot index"""
 	timeline_type = type
 	slot_index = slot
-	update_cell_hover_colors()
+	# Update BattleGrid timeline type
+	if battle_grid:
+		battle_grid.timeline_type = _get_timeline_type_enum()
 	apply_timeline_visibility_rules()  # Apply visibility rules for this timeline type
 
 func _process(delta: float):
@@ -151,16 +166,9 @@ func stop_hover_animation():
 
 func update_cell_hover_colors():
 	"""Update hover colors for all cells based on current timeline type"""
-	# Safety check: only update if grid is set up
-	if grid_cells.is_empty():
-		return
-
-	var hover_color = get_timeline_hover_color()
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = grid_cells[row][col]
-			if cell:
-				cell.set_hover_color(hover_color)
+	# BattleGrid handles colors automatically based on timeline_type
+	# This function is kept for backwards compatibility but does nothing
+	pass
 
 # ===== TIMELINE VISIBILITY RULES =====
 
@@ -170,8 +178,9 @@ func set_timeline_type(new_type: String):
 		print("Timeline type changed: ", timeline_type, " → ", new_type)
 		timeline_type = new_type
 
-		# Update cell hover colors
-		update_cell_hover_colors()
+		# Update BattleGrid timeline type (handles colors automatically)
+		if battle_grid:
+			battle_grid.timeline_type = _get_timeline_type_enum()
 
 		# Apply visibility rules
 		apply_timeline_visibility_rules()
@@ -488,45 +497,10 @@ func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 # ===== GRID SYSTEM =====
 
 func setup_grid():
-	"""Create grid of cells (size from GridConfig)"""
-	print("DEBUG setup_grid: Starting for ", timeline_type, " - Grid size: ", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS)
-	print("DEBUG setup_grid: grid_container = ", grid_container)
-
-	if not grid_container:
-		print("DEBUG setup_grid: grid_container is null! Aborting.")
-		return
-
-	# Initialize 2D array for grid cells
-	grid_cells = []
-	for row in range(GridConfig.GRID_ROWS):
-		var row_array = []
-		for col in range(GridConfig.GRID_COLS):
-			row_array.append(null)
-		grid_cells.append(row_array)
-
-	print("DEBUG setup_grid: Creating ", GridConfig.GRID_ROWS * GridConfig.GRID_COLS, " cells...")
-
-	# Create grid cells
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = GRID_CELL_SCENE.instantiate()
-			cell.initialize(row, col)
-
-			# Connect cell signals
-			cell.cell_clicked.connect(_on_cell_clicked)
-			cell.cell_hovered.connect(_on_cell_hovered)
-			cell.cell_exited.connect(_on_cell_exited)
-
-			# Position cell (dynamic size based on GridConfig)
-			cell.position = GridConfig.get_cell_position(row, col)
-
-			# Set timeline-appropriate hover color
-			cell.set_hover_color(get_timeline_hover_color())
-
-			grid_container.add_child(cell)
-			grid_cells[row][col] = cell
-
-	print("DEBUG setup_grid: Created all cells. Total children in grid_container: ", grid_container.get_child_count())
+	"""Setup grid - now delegated to BattleGrid"""
+	if battle_grid:
+		battle_grid.setup_grid()
+		print("BattleGrid setup complete for ", timeline_type, " panel")
 
 func get_timeline_hover_color() -> Color:
 	"""Get hover color based on timeline type"""
@@ -542,39 +516,33 @@ func get_timeline_hover_color() -> Color:
 
 func get_cell_at_position(row: int, col: int):
 	"""Get grid cell at specific row/col coordinates"""
-	if row < 0 or row >= GridConfig.GRID_ROWS or col < 0 or col >= GridConfig.GRID_COLS:
-		return null
-	return grid_cells[row][col]
+	if battle_grid:
+		return battle_grid.get_cell(col, row)  # BattleGrid uses (x, y) = (col, row)
+	return null
 
 func highlight_cell(row: int, col: int, color: Color = Color(1, 1, 1, 0.3)):
 	"""Highlight a specific grid cell"""
-	var cell = get_cell_at_position(row, col)
-	if cell:
-		cell.show_highlight(color)
+	if battle_grid:
+		# Note: BattleGrid doesn't have highlight, but has set_cell_state
+		# For now, this is a no-op. Can be enhanced later.
+		pass
 
 func clear_all_highlights():
 	"""Clear all grid cell highlights"""
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = grid_cells[row][col]
-			if cell:
-				cell.hide_highlight()
+	if battle_grid:
+		battle_grid.reset_all_states()
 
 func show_grid_lines(visible: bool):
 	"""Toggle grid lines visibility for all cells"""
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = grid_cells[row][col]
-			if cell:
-				cell.show_grid_lines(visible)
+	# GridCell in BattleGrid system doesn't have grid lines toggle
+	# This is kept for backwards compatibility but does nothing
+	pass
 
 func show_debug_info(visible: bool):
 	"""Toggle debug coordinate labels for all cells"""
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = grid_cells[row][col]
-			if cell:
-				cell.show_debug_info(visible)
+	# GridCell in BattleGrid system doesn't have debug info
+	# This is kept for backwards compatibility but does nothing
+	pass
 
 func place_entity_at_cell(entity: Node2D, row: int, col: int):
 	"""Place an entity at the center of a specific grid cell"""
@@ -582,11 +550,12 @@ func place_entity_at_cell(entity: Node2D, row: int, col: int):
 		print("Warning: Invalid cell position (", row, ", ", col, ")")
 		return
 
-	# Calculate cell center position (dynamic based on GridConfig)
-	var cell_center = GridConfig.get_cell_center_position(row, col)
-
-	entity.position = cell_center
-	print("Placed entity at cell (", row, ", ", col, ") -> position ", cell_center)
+	# Get cell center position from BattleGrid (uses global coordinates)
+	if battle_grid:
+		var cell_center_global = battle_grid.get_cell_center_position(col, row)
+		# Convert to local coordinates relative to this panel
+		entity.global_position = cell_center_global
+		print("Placed entity at cell (", row, ", ", col, ") -> global position ", cell_center_global)
 
 func get_cell_from_entity_position(entity: Node2D) -> Vector2i:
 	"""Get the grid cell coordinates from an entity's position"""
@@ -616,12 +585,8 @@ func _on_cell_exited(row: int, col: int):
 
 func set_grid_interactive(enabled: bool):
 	"""Enable or disable grid cell interactivity"""
-	for row in range(GridConfig.GRID_ROWS):
-		for col in range(GridConfig.GRID_COLS):
-			var cell = grid_cells[row][col]
-			if cell:
-				cell.input_pickable = enabled
-				cell.monitoring = enabled
+	if battle_grid:
+		battle_grid.set_interactive(enabled)
 	print("  Grid interactive for ", timeline_type, " panel: ", enabled)
 
 # ===== GRID-BASED ENTITY POSITIONING =====
@@ -687,8 +652,10 @@ func get_grid_position_for_entity(entity_index: int, is_player: bool, total_enem
 	return Vector2i(2, 2)
 
 func get_cell_center_position(row: int, col: int) -> Vector2:
-	"""Get the pixel position of a cell's center"""
-	return GridConfig.get_cell_center_position(row, col)
+	"""Get the pixel position of a cell's center (global coordinates)"""
+	if battle_grid:
+		return battle_grid.get_cell_center_position(col, row)
+	return Vector2.ZERO
 
 func is_cell_occupied(row: int, col: int) -> bool:
 	"""Check if a cell is occupied by an entity (using new data model)"""
@@ -728,11 +695,9 @@ func mark_cell_as_hazard(row: int, col: int, hazard_type: String, hazard_data: D
 		"col": col
 	}
 
-	# Visual indicator
-	var cell = get_cell_at_position(row, col)
-	if cell:
-		var hazard_color = get_hazard_color(hazard_type)
-		cell.show_highlight(hazard_color)
+	# Visual indicator - use TARGETED state for hazards
+	if battle_grid:
+		battle_grid.set_cell_state(col, row, 4)  # GridCell.CellState.TARGETED = 4
 
 	print("Marked cell (", row, ", ", col, ") as ", hazard_type, " hazard")
 
@@ -741,9 +706,8 @@ func clear_hazard(row: int, col: int):
 	var key = str(row) + "," + str(col)
 	if cell_hazards.has(key):
 		cell_hazards.erase(key)
-		var cell = get_cell_at_position(row, col)
-		if cell:
-			cell.hide_highlight()
+		if battle_grid:
+			battle_grid.set_cell_state(col, row, 0)  # GridCell.CellState.NORMAL = 0
 
 func get_hazard_at_cell(row: int, col: int) -> Dictionary:
 	"""Get hazard data at a specific cell, or empty dict if none"""
@@ -823,8 +787,10 @@ func highlight_valid_targets(card_type: String):
 	"""Highlight all valid target cells for a card"""
 	clear_all_highlights()
 	var valid_cells = get_valid_target_cells(card_type)
-	for cell_coord in valid_cells:
-		highlight_cell(cell_coord.x, cell_coord.y, Color(0, 1, 0, 0.3))  # Green highlight
+	if battle_grid:
+		for cell_coord in valid_cells:
+			# Use TARGETED state for highlighting (red border)
+			battle_grid.set_cell_state(cell_coord.y, cell_coord.x, 4)  # GridCell.CellState.TARGETED = 4
 
 # =============================================================================
 # INTEGRATION DOCUMENTATION

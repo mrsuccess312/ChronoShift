@@ -1,0 +1,18 @@
+[gd_scene load_steps=3 format=3 uid="uid://c8k4m2p9j1vxy"]
+
+[ext_resource type="Script" path="res://scripts/ui/GridCell.gd" id="1_gridcell"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_gridcell"]
+bg_color = Color(0.925, 0.925, 0.925, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_size = 5
+shadow_offset = Vector2(0, 3)
+shadow_color = Color(0, 0, 0, 0.15)
+
+[node name="GridCell" type="Panel"]
+custom_minimum_size = Vector2(80, 80)
+theme_override_styles/panel = SubResource("StyleBoxFlat_gridcell")
+script = ExtResource("1_gridcell")
