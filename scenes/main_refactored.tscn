@@ -157,33 +157,29 @@ position = Vector2(960, 540)
 
 [node name="PastGrid" parent="UIRoot" instance=ExtResource("2_battlegrid")]
 layout_mode = 1
-offset_left = 50.0
-offset_top = 100.0
-offset_right = 350.0
-offset_bottom = 400.0
+offset_left = 196.0
+offset_top = 125.0
+offset_right = 796.0
+offset_bottom = 875.0
+scale = Vector2(0.65, 0.65)
 timeline_type = 0
 
 [node name="PresentGrid" parent="UIRoot" instance=ExtResource("2_battlegrid")]
 layout_mode = 1
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -250.0
-offset_top = -250.0
-offset_right = 250.0
-offset_bottom = 250.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_left = 660.0
+offset_top = 90.0
+offset_right = 1260.0
+offset_bottom = 840.0
+scale = Vector2(0.8, 0.8)
 timeline_type = 1
 
 [node name="FutureGrid" parent="UIRoot" instance=ExtResource("2_battlegrid")]
 layout_mode = 1
-offset_left = 1570.0
-offset_top = 100.0
-offset_right = 1870.0
-offset_bottom = 400.0
+offset_left = 1124.0
+offset_top = 125.0
+offset_right = 1724.0
+offset_bottom = 875.0
+scale = Vector2(0.65, 0.65)
 timeline_type = 2
 
 [node name="EntityLayer" type="Node2D" parent="."]
