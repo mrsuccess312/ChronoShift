@@ -1,7 +1,7 @@
 extends Area2D
 
 # ===== GRID CELL SCRIPT =====
-# Represents a single cell in the 5x5 grid
+# Represents a single cell in the grid (size from GridConfig)
 
 signal cell_clicked(row: int, col: int)
 signal cell_hovered(row: int, col: int)
@@ -19,6 +19,9 @@ var hover_color: Color = Color(1, 1, 1, 0.3)  # Default hover color
 
 func _ready():
 	print("DEBUG GridCell _ready: Cell (", row, ", ", col, ") initializing")
+
+	# Dynamically resize cell based on GridConfig
+	_resize_cell_components()
 
 	# Enable monitoring
 	monitoring = true
@@ -55,6 +58,48 @@ func initialize(grid_row: int, grid_col: int):
 	# Update debug label
 	if debug_label:
 		debug_label.text = "(%d,%d)" % [row, col]
+
+func _resize_cell_components():
+	"""Dynamically resize all cell components based on GridConfig"""
+	var cell_size = GridConfig.get_cell_size()
+	var cell_width = cell_size.x
+	var cell_height = cell_size.y
+
+	# Resize collision shape
+	if collision_shape and collision_shape.shape:
+		collision_shape.shape.size = cell_size
+		collision_shape.position = Vector2(cell_width / 2, cell_height / 2)
+
+	# Resize highlight ColorRect
+	if highlight:
+		highlight.size = cell_size
+		highlight.offset_right = cell_width
+		highlight.offset_bottom = cell_height
+
+	# Resize grid lines container
+	if grid_lines:
+		grid_lines.size = cell_size
+		grid_lines.set_size(cell_size)
+
+		# Update right line position
+		var right_line = grid_lines.get_node_or_null("RightLine")
+		if right_line:
+			right_line.offset_left = cell_width - 1
+			right_line.offset_right = cell_width
+			right_line.offset_bottom = cell_height
+
+		# Update bottom line position
+		var bottom_line = grid_lines.get_node_or_null("BottomLine")
+		if bottom_line:
+			bottom_line.offset_top = cell_height - 1
+			bottom_line.offset_right = cell_width
+			bottom_line.offset_bottom = cell_height
+
+	# Resize debug label
+	if debug_label:
+		debug_label.size = cell_size
+		debug_label.offset_right = cell_width
+		debug_label.offset_bottom = cell_height
 
 func set_hover_color(color: Color):
 	"""Set the hover color for this cell based on timeline type"""
