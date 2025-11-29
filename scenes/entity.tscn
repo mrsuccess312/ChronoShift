@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://dm8rkbfsplgmj"]
+[gd_scene load_steps=4 format=3 uid="uid://dm8rkbfsplgmj"]
 
 [ext_resource type="Script" uid="uid://bpdrk23ljnimx" path="res://scripts/entity.gd" id="1_7rtaj"]
 [ext_resource type="AudioStream" uid="uid://c0jdsyj6awkkt" path="res://sound effects/entity-attack.wav" id="2_gr72c"]
+[ext_resource type="SpriteFrames" uid="uid://bmf4ws2k7pfda" path="res://sprites/player/player_animations.tres" id="3_m0cyi"]
 
 [node name="Entity" type="Node2D"]
 script = ExtResource("1_7rtaj")
@@ -13,6 +14,12 @@ offset_right = 36.0
 offset_bottom = 36.0
 mouse_filter = 2
 color = Color(0.2901961, 0.87058824, 0.5019608, 1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+visible = false
+scale = Vector2(0.35, 0.35)
+sprite_frames = ExtResource("3_m0cyi")
+animation = &"idle"
 
 [node name="HPLabel" type="Label" parent="."]
 offset_left = -30.0
