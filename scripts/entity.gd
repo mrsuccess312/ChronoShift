@@ -7,6 +7,7 @@ var timeline_type = "present"
 
 # References to child nodes
 @onready var sprite = $Sprite
+@onready var animated_sprite = $AnimatedSprite2D
 @onready var hp_label = $HPLabel
 @onready var damage_label = $DamageLabel
 @onready var attack_sound = $AttackSound
@@ -66,6 +67,9 @@ func _ready():
 	# Update visuals
 	update_display()
 
+	# Setup sprite type based on entity type (player vs enemy)
+	_setup_sprite_display()
+
 func _on_sprite_gui_input(event: InputEvent):
 	"""Handle mouse clicks on sprite for targeting"""
 	if not is_targetable:
@@ -74,6 +78,21 @@ func _on_sprite_gui_input(event: InputEvent):
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 			_on_entity_clicked_for_targeting()
+
+func _setup_sprite_display():
+	"""Setup the appropriate sprite type based on whether this is a player or enemy"""
+	if is_player:
+		# Player uses animated sprite
+		animated_sprite.visible = true
+		sprite.visible = false
+
+		# Load player animations and play idle
+		animated_sprite.sprite_frames = load("res://assets/sprites/player/player_animations.tres")
+		animated_sprite.play("idle")
+	else:
+		# Enemies use ColorRect
+		animated_sprite.visible = false
+		sprite.visible = true
 
 func update_display():
 	"""Update visual elements based on entity data"""
@@ -112,11 +131,17 @@ func update_display():
 	if current_hp <= 0:
 		modulate = Color(0.4, 0.4, 0.4, 0.5)
 	elif current_hp < max_hp * 0.3:
+		# Apply pulse animation to the visible sprite (animated for player, ColorRect for enemies)
+		var target_sprite = animated_sprite if is_player else sprite
 		var tween = create_tween().set_loops()
-		tween.tween_property(sprite, "modulate", Color(1.5, 0.8, 0.8), 0.5)
-		tween.tween_property(sprite, "modulate", Color(1.0, 1.0, 1.0), 0.5)
+		tween.tween_property(target_sprite, "modulate", Color(1.5, 0.8, 0.8), 0.5)
+		tween.tween_property(target_sprite, "modulate", Color(1.0, 1.0, 1.0), 0.5)
 	else:
-		sprite.modulate = Color(1.0, 1.0, 1.0)
+		# Reset modulate on the appropriate sprite
+		if is_player:
+			animated_sprite.modulate = Color(1.0, 1.0, 1.0)
+		else:
+			sprite.modulate = Color(1.0, 1.0, 1.0)
 
 func play_attack_sound():
 	"""Play this entity's attack sound"""

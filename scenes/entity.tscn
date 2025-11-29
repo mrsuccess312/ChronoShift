@@ -14,6 +14,10 @@ offset_bottom = 36.0
 mouse_filter = 2
 color = Color(0.2901961, 0.87058824, 0.5019608, 1)
 
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+visible = false
+scale = Vector2(0.28, 0.28)
+
 [node name="HPLabel" type="Label" parent="."]
 offset_left = -30.0
 offset_top = 45.0
