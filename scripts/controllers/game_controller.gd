@@ -67,8 +67,8 @@ func _ready() -> void:
 	# THEN initialize systems (they need timeline_panels reference)
 	_initialize_systems()
 
-	# Initialize game state
-	_initialize_game()
+	# Initialize game state (async - waits for grid layout)
+	await _initialize_game()
 
 	# Connect events
 	_connect_events()
