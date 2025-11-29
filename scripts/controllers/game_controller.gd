@@ -136,12 +136,12 @@ func _setup_carousel() -> void:
 
 	# Define carousel positions (extracted from game_manager.gd)
 	carousel_positions = [
-		{ "position": Vector2(0, 150), "scale": Vector2(0.6, 0.6), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
-		{ "position": Vector2(136, 125), "scale": Vector2(0.75, 0.75), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
-		{ "position": Vector2(660, 90), "scale": Vector2(1.0, 1.0), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 2 },
-		{ "position": Vector2(1184, 125), "scale": Vector2(0.75, 0.75), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
-		{ "position": Vector2(1320, 150), "scale": Vector2(0.6, 0.6), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
-		{ "position": Vector2(1300, 175), "scale": Vector2(0.5, 0.5), "modulate": Color(1.0, 1.0, 1.0, 0.7), "z_index": -1 }
+		{ "position": Vector2(0, 150), "scale": Vector2(0.4, 0.4), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
+		{ "position": Vector2(196, 125), "scale": Vector2(0.65, 0.65), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
+		{ "position": Vector2(660, 90), "scale": Vector2(0.8, 0.8), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 2 },
+		{ "position": Vector2(1124, 125), "scale": Vector2(0.65, 0.65), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 1 },
+		{ "position": Vector2(1320, 150), "scale": Vector2(0.4, 0.4), "modulate": Color(1.0, 1.0, 1.0, 1.0), "z_index": 0 },
+		{ "position": Vector2(1300, 175), "scale": Vector2(0.3, 0.3), "modulate": Color(1.0, 1.0, 1.0, 0.7), "z_index": -1 }
 	]
 
 	# Create 6 timeline panel instances
@@ -328,8 +328,7 @@ func _initialize_game() -> void:
 	print("  Initial targets calculated:")
 	TargetCalculator.print_target_summary(present_panel)
 
-	# Create backwards-compatible state dictionary for systems that still need it
-	present_panel.state = present_panel.get_state_dict()
+	# State dictionary no longer needed - using EntityData directly
 
 	# Store base damage in GameState
 	GameState.base_player_damage = 15
@@ -404,8 +403,7 @@ func _execute_complete_turn() -> void:
 	present_panel = timeline_panels[2]
 	await combat_resolver.execute_combat(present_panel, true)
 
-	# Update backwards-compatible state after combat (so carousel captures correct HP)
-	present_panel.state = present_panel.get_state_dict()
+	# EntityData already updated during combat - no state sync needed
 
 	# Recalculate targets for PRESENT (enemies may have died, need to retarget)
 	print("  🎯 Recalculating targets for PRESENT after combat...")
@@ -421,8 +419,7 @@ func _execute_complete_turn() -> void:
 		for entity in real_future_entities:
 			present_panel.entity_data_list.append(entity.duplicate_entity())
 
-		# Update backwards-compatible state
-		present_panel.state = present_panel.get_state_dict()
+		# EntityData already updated - no state sync needed
 
 		# Clear REAL_FUTURE
 		GameState.clear_real_future()
@@ -489,9 +486,7 @@ func _carousel_slide_animation() -> void:
 		if entity.is_enemy:
 			entities_for_new_present.append(entity.duplicate_entity())
 
-	# Also capture backwards-compatible state
-	var state_for_past = slot_2_panel.state.duplicate(true)
-	var state_for_new_present = slot_3_panel.state.duplicate(true)
+	# EntityData already captured above - no state dict needed
 
 	# Rotate timeline panels array
 	var first_panel = timeline_panels.pop_front()
@@ -509,9 +504,7 @@ func _carousel_slide_animation() -> void:
 	timeline_panels[1].entity_data_list = entities_for_past
 	timeline_panels[2].entity_data_list = entities_for_new_present
 
-	# Also assign backwards-compatible state
-	timeline_panels[1].state = state_for_past
-	timeline_panels[2].state = state_for_new_present
+	# EntityData already assigned - no state dict needed
 
 	# Animate panels to new positions
 	var tween = create_tween()
@@ -531,9 +524,8 @@ func _carousel_slide_animation() -> void:
 
 	await tween.finished
 
-	# Clear decorative panel states and entities AFTER slide animation
+	# Clear decorative panel entities AFTER slide animation
 	for i in [0, 4, 5]:
-		timeline_panels[i].state = {}
 		timeline_panels[i].entity_data_list.clear()
 		timeline_panels[i].clear_entities()
 		timeline_panels[i].clear_arrows()
@@ -591,34 +583,10 @@ func _show_labels_after_carousel() -> void:
 
 
 func _sync_entities_to_state(panel: Panel) -> void:
-	"""Sync entity data to match panel state (fixes Future→Present data mismatch)"""
-	if panel.state.is_empty():
-		return
-
-	var enemy_index = 0
-	for entity in panel.entity_nodes:
-		if not entity or not is_instance_valid(entity):
-			continue
-
-		if entity.is_player:
-			# Update player entity data from panel state
-			if panel.state.has("player"):
-				# CRITICAL: Preserve unique_id before overwriting
-				var saved_unique_id = entity.entity_data.get("unique_id", "")
-				entity.entity_data = panel.state["player"].duplicate()
-				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
-				entity.update_display()
-				print("  Synced player: HP=", entity.entity_data["hp"])
-		else:
-			# Update enemy entity data from panel state
-			if panel.state.has("enemies") and enemy_index < panel.state["enemies"].size():
-				# CRITICAL: Preserve unique_id before overwriting
-				var saved_unique_id = entity.entity_data.get("unique_id", "")
-				entity.entity_data = panel.state["enemies"][enemy_index].duplicate()
-				entity.entity_data["unique_id"] = saved_unique_id  # Restore unique_id
-				entity.update_display()
-				print("  Synced enemy ", enemy_index, ": HP=", entity.entity_data["hp"])
-				enemy_index += 1
+	"""[DEPRECATED] Entity data is now synchronized via EntityData directly - this function no longer needed"""
+	# EntityData is the source of truth, visual nodes update from it automatically
+	# No manual syncing required
+	pass
 
 
 func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
@@ -684,8 +652,7 @@ func _calculate_future_state() -> void:
 	# Simulate combat to get predicted HP values
 	_simulate_combat(future_panel)
 
-	# Create backwards-compatible state dictionary
-	future_panel.state = future_panel.get_state_dict()
+	# EntityData is source of truth - no state dict needed
 	future_panel.timeline_type = "future"
 
 	print("  ✅ Future timeline calculated")
@@ -776,8 +743,7 @@ func _recalculate_future_timelines() -> void:
 	# Simulate combat to get predicted HP values
 	_simulate_combat(future_panel)
 
-	# Create backwards-compatible state dictionary
-	future_panel.state = future_panel.get_state_dict()
+	# EntityData is source of truth - no state dict needed
 	future_panel.timeline_type = "future"
 
 	print("  ✅ Future recalculated")
@@ -815,7 +781,7 @@ func _create_timeline_entities(tp: Panel) -> void:
 
 		tp.add_child(entity_node)
 		tp.entity_nodes.append(entity_node)
-		tp.entities.append(entity_node)  # Also append to backwards-compatible array
+		# No longer using backwards-compatible entities array
 
 		# Gray out dead entities in Future timeline
 		if tp.timeline_type == "future" and not entity_data.is_alive():
@@ -1052,8 +1018,12 @@ func _update_wave_counter() -> void:
 
 func _update_damage_display() -> void:
 	var present_panel = timeline_panels[2]
-	if present_panel and present_panel.state.has("player"):
-		damage_label.text = str(present_panel.state["player"]["damage"])
+	if present_panel and present_panel.entity_data_list.size() > 0:
+		# Find player entity
+		for entity_data in present_panel.entity_data_list:
+			if not entity_data.is_enemy:
+				damage_label.text = str(entity_data.damage)
+				break
 
 
 func _hide_ui_for_carousel() -> void:

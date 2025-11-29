@@ -170,8 +170,7 @@ func _animate_attack(attacker: EntityData, target: EntityData, attacker_node: No
 		# Remove from panel arrays immediately to prevent accessing freed node
 		if present_panel.entity_nodes.has(target_node):
 			present_panel.entity_nodes.erase(target_node)
-		if present_panel.entities.has(target_node):
-			present_panel.entities.erase(target_node)
+		# No longer using backwards-compatible entities array
 		if present_panel.entity_data_list.has(target):
 			present_panel.entity_data_list.erase(target)
 
