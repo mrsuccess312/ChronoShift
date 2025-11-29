@@ -779,13 +779,14 @@ func _create_timeline_entities(tp: Panel) -> void:
 		var entity_dict = entity_data.to_dict()
 		entity_node.setup(entity_dict, not entity_data.is_enemy, tp.timeline_type)
 
-		# Position entity at grid location using panel's internal BattleGrid
-		var world_pos = tp.get_cell_center_position(entity_data.grid_row, entity_data.grid_col)
-		entity_node.position = world_pos
-
-		# Add entity as child of the panel (not global EntityLayer)
+		# Add entity as child of the panel first (before positioning)
 		tp.add_child(entity_node)
 		tp.entity_nodes.append(entity_node)
+
+		# Position entity at grid location using panel's internal BattleGrid
+		# get_cell_center_position returns global coordinates, so use global_position
+		var global_pos = tp.get_cell_center_position(entity_data.grid_row, entity_data.grid_col)
+		entity_node.global_position = global_pos
 
 		# Gray out dead entities in Future timeline
 		if tp.timeline_type == "future" and not entity_data.is_alive():
