@@ -168,3 +168,6 @@ offset_right = 250.0
 offset_bottom = 250.0
 grow_horizontal = 2
 grow_vertical = 2
+
+[node name="EntityLayer" type="Node2D" parent="."]
+z_index = 10

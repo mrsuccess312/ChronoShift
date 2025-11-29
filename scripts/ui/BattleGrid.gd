@@ -8,6 +8,9 @@ class_name BattleGrid
 # Signal re-emitted when any cell is clicked
 signal grid_cell_clicked(x: int, y: int)
 
+# Signal emitted when grid layout changes (for entity repositioning)
+signal grid_layout_changed
+
 # Constants for fixed cell sizing
 const CELL_SIZE: float = 80.0  # Fixed cell size (both width and height)
 const PANEL_MARGIN: float = 20.0  # Margin from panel edges to grid
@@ -162,6 +165,36 @@ func get_cell(x: int, y: int) -> GridCell:
 
 	return null
 
+func get_cell_center_position(x: int, y: int) -> Vector2:
+	"""Get the global center position of a cell for entity placement
+
+	This function returns the global position where an entity should be placed
+	to appear centered on the specified grid cell. Accounts for:
+	- Fixed cell size (80x80)
+	- Dynamic spacing between cells
+	- Panel margins
+	- BattleGrid's global position
+
+	Args:
+		x: Column index (0 to grid_width-1)
+		y: Row index (0 to grid_height-1)
+
+	Returns:
+		Global center position of the cell, or Vector2.ZERO if invalid
+	"""
+	var cell = get_cell(x, y)
+	if not cell:
+		push_warning("BattleGrid: Cannot get center position for invalid cell (%d, %d)" % [x, y])
+		return Vector2.ZERO
+
+	# Get the cell's global position (top-left corner)
+	var cell_global_pos = cell.global_position
+
+	# Add half the cell size to get the center
+	var cell_center = cell_global_pos + Vector2(CELL_SIZE / 2, CELL_SIZE / 2)
+
+	return cell_center
+
 func highlight_cell(x: int, y: int, color: Color) -> void:
 	"""Change a cell's background color (deprecated - use set_cell_state instead)
 
@@ -222,3 +255,5 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
 		if is_inside_tree() and cell_container:
 			calculate_spacing()
+			# Emit signal so GameController can reposition entities
+			grid_layout_changed.emit()
