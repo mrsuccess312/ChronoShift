@@ -927,35 +927,35 @@ func _find_smart_position_for_twin(panel, player: EntityData) -> Vector2i:
 		for col in range(furthest_ally.grid_col - 1, -1, -1):
 			positions_to_try.append(Vector2i(target_row, col))
 		# Right cells (col furthest_ally.col + 1 to end)
-		for col in range(furthest_ally.grid_col + 1, panel.GRID_COLS):
+		for col in range(furthest_ally.grid_col + 1, GridConfig.GRID_COLS):
 			positions_to_try.append(Vector2i(target_row, col))
 	else:
 		# If no furthest ally, try around player
 		for col in range(player.grid_col - 1, -1, -1):
 			positions_to_try.append(Vector2i(target_row, col))
-		for col in range(player.grid_col + 1, panel.GRID_COLS):
+		for col in range(player.grid_col + 1, GridConfig.GRID_COLS):
 			positions_to_try.append(Vector2i(target_row, col))
 
 	# Try positions in order
 	for pos in positions_to_try:
-		if pos.x >= 0 and pos.x < panel.GRID_ROWS and pos.y >= 0 and pos.y < panel.GRID_COLS:
+		if pos.x >= 0 and pos.x < GridConfig.GRID_ROWS and pos.y >= 0 and pos.y < GridConfig.GRID_COLS:
 			if panel.cell_entities[pos.x][pos.y] == null:
 				return pos
 
 	# If same row is full, try next row
 	for row_offset in [1, -1, 2, -2]:
 		var new_row = target_row + row_offset
-		if new_row < 0 or new_row >= panel.GRID_ROWS:
+		if new_row < 0 or new_row >= GridConfig.GRID_ROWS:
 			continue
 
 		# Try left cells first, then right
-		for col in range(panel.GRID_COLS):
+		for col in range(GridConfig.GRID_COLS):
 			if panel.cell_entities[new_row][col] == null:
 				return Vector2i(new_row, col)
 
 	# Fallback: find any empty cell
-	for row in range(panel.GRID_ROWS):
-		for col in range(panel.GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			if panel.cell_entities[row][col] == null:
 				return Vector2i(row, col)
 

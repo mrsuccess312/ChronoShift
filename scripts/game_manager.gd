@@ -421,7 +421,7 @@ func find_empty_cell_left_of_player(tp: Panel, player_pos: Vector2i, enemy_count
 
 	# Check each position to see if it's empty and valid
 	for pos in test_positions:
-		if pos.x >= 0 and pos.x < tp.GRID_ROWS and pos.y >= 0 and pos.y < tp.GRID_COLS:
+		if pos.x >= 0 and pos.x < GridConfig.GRID_ROWS and pos.y >= 0 and pos.y < GridConfig.GRID_COLS:
 			if not tp.is_cell_occupied(pos.x, pos.y):
 				return pos
 

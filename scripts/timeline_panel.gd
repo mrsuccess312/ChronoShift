@@ -27,8 +27,7 @@ var slot_index: int = -1  # Current carousel slot position
 
 # Grid system
 var grid_cells: Array = []  # 2D array [row][col] of grid cell nodes
-const GRID_ROWS: int = 5
-const GRID_COLS: int = 5
+# Grid dimensions now come from GridConfig (configurable)
 
 # Hover animation
 var hover_enabled: bool = false
@@ -45,17 +44,20 @@ func _ready():
 	"""Setup grid when panel is added to scene"""
 	print("TimelinePanel _ready() called for ", timeline_type)
 
+	# Dynamically resize panel based on GridConfig
+	_resize_panel_components()
+
 	# Store base position for hover animation
 	base_position_y = position.y
 
 	# Set random time offset for unique phase (0 to 2*PI)
 	time_offset = randf() * TAU
 
-	# Initialize cell_entities grid (5x5 of nulls)
+	# Initialize cell_entities grid (dynamic size based on GridConfig)
 	cell_entities = []
-	for row in range(GRID_ROWS):
+	for row in range(GridConfig.GRID_ROWS):
 		var row_array = []
-		for col in range(GRID_COLS):
+		for col in range(GridConfig.GRID_COLS):
 			row_array.append(null)  # No entity in cell
 		cell_entities.append(row_array)
 
@@ -63,6 +65,39 @@ func _ready():
 	# Update hover colors after grid is set up
 	update_cell_hover_colors()
 	print("TimelinePanel _ready() complete - grid has ", grid_cells.size(), " rows")
+
+func _resize_panel_components():
+	"""Dynamically resize panel and child components based on GridConfig"""
+	var panel_size = GridConfig.get_panel_size()
+	var panel_width = panel_size.x
+	var panel_height = panel_size.y
+
+	# Resize the panel itself
+	set_size(panel_size)
+	size = panel_size
+	custom_minimum_size = panel_size
+
+	# Update pivot offset (center of panel for rotation/scaling)
+	pivot_offset = Vector2(panel_width / 2, panel_height / 2)
+
+	# Resize shadow (10px offset from panel)
+	if shadow:
+		shadow.offset_left = 10.0
+		shadow.offset_top = 10.0
+		shadow.offset_right = panel_width + 10.0
+		shadow.offset_bottom = panel_height + 10.0
+
+	# Resize grid container
+	if grid_container:
+		grid_container.set_size(panel_size)
+		grid_container.size = panel_size
+
+	# Update panel label width
+	var panel_label = get_node_or_null("PanelLabel")
+	if panel_label:
+		panel_label.offset_right = panel_width
+
+	print("Panel resized to: ", panel_size, " (", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS, " grid)")
 
 func initialize(type: String, slot: int):
 	"""Initialize the timeline panel with type and slot index"""
@@ -121,8 +156,8 @@ func update_cell_hover_colors():
 		return
 
 	var hover_color = get_timeline_hover_color()
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.set_hover_color(hover_color)
@@ -241,7 +276,7 @@ func _apply_decorative_visibility():
 
 func add_entity(entity: EntityData, row: int, col: int) -> bool:
 	"""Add entity to timeline at grid position"""
-	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+	if row < 0 or row >= GridConfig.GRID_ROWS or col < 0 or col >= GridConfig.GRID_COLS:
 		print("Invalid grid position: (", row, ", ", col, ")")
 		return false
 
@@ -273,13 +308,13 @@ func remove_entity(entity: EntityData):
 
 func get_entity_at(row: int, col: int) -> EntityData:
 	"""Get entity at grid position (or null)"""
-	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+	if row < 0 or row >= GridConfig.GRID_ROWS or col < 0 or col >= GridConfig.GRID_COLS:
 		return null
 	return cell_entities[row][col]
 
 func move_entity(entity: EntityData, new_row: int, new_col: int) -> bool:
 	"""Move entity to new grid position"""
-	if new_row < 0 or new_row >= GRID_ROWS or new_col < 0 or new_col >= GRID_COLS:
+	if new_row < 0 or new_row >= GridConfig.GRID_ROWS or new_col < 0 or new_col >= GridConfig.GRID_COLS:
 		return false
 
 	if cell_entities[new_row][new_col] != null:
@@ -315,8 +350,8 @@ func get_enemy_entities() -> Array[EntityData]:
 func clear_all_entities():
 	"""Remove all entities from timeline (data model)"""
 	entity_data_list.clear()
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			cell_entities[row][col] = null
 
 # ===== VISUAL ENTITY NODES =====
@@ -453,8 +488,8 @@ func _calculate_smart_curve(from: Vector2, to: Vector2) -> float:
 # ===== GRID SYSTEM =====
 
 func setup_grid():
-	"""Create 5x5 grid of cells"""
-	print("DEBUG setup_grid: Starting for ", timeline_type)
+	"""Create grid of cells (size from GridConfig)"""
+	print("DEBUG setup_grid: Starting for ", timeline_type, " - Grid size: ", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS)
 	print("DEBUG setup_grid: grid_container = ", grid_container)
 
 	if not grid_container:
@@ -463,17 +498,17 @@ func setup_grid():
 
 	# Initialize 2D array for grid cells
 	grid_cells = []
-	for row in range(GRID_ROWS):
+	for row in range(GridConfig.GRID_ROWS):
 		var row_array = []
-		for col in range(GRID_COLS):
+		for col in range(GridConfig.GRID_COLS):
 			row_array.append(null)
 		grid_cells.append(row_array)
 
-	print("DEBUG setup_grid: Creating ", GRID_ROWS * GRID_COLS, " cells...")
+	print("DEBUG setup_grid: Creating ", GridConfig.GRID_ROWS * GridConfig.GRID_COLS, " cells...")
 
 	# Create grid cells
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = GRID_CELL_SCENE.instantiate()
 			cell.initialize(row, col)
 
@@ -482,8 +517,8 @@ func setup_grid():
 			cell.cell_hovered.connect(_on_cell_hovered)
 			cell.cell_exited.connect(_on_cell_exited)
 
-			# Position cell (120px wide, 150px tall per cell)
-			cell.position = Vector2(col * 120, row * 150)
+			# Position cell (dynamic size based on GridConfig)
+			cell.position = GridConfig.get_cell_position(row, col)
 
 			# Set timeline-appropriate hover color
 			cell.set_hover_color(get_timeline_hover_color())
@@ -507,7 +542,7 @@ func get_timeline_hover_color() -> Color:
 
 func get_cell_at_position(row: int, col: int):
 	"""Get grid cell at specific row/col coordinates"""
-	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+	if row < 0 or row >= GridConfig.GRID_ROWS or col < 0 or col >= GridConfig.GRID_COLS:
 		return null
 	return grid_cells[row][col]
 
@@ -519,53 +554,50 @@ func highlight_cell(row: int, col: int, color: Color = Color(1, 1, 1, 0.3)):
 
 func clear_all_highlights():
 	"""Clear all grid cell highlights"""
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.hide_highlight()
 
 func show_grid_lines(visible: bool):
 	"""Toggle grid lines visibility for all cells"""
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.show_grid_lines(visible)
 
 func show_debug_info(visible: bool):
 	"""Toggle debug coordinate labels for all cells"""
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.show_debug_info(visible)
 
 func place_entity_at_cell(entity: Node2D, row: int, col: int):
 	"""Place an entity at the center of a specific grid cell"""
-	if row < 0 or row >= GRID_ROWS or col < 0 or col >= GRID_COLS:
+	if row < 0 or row >= GridConfig.GRID_ROWS or col < 0 or col >= GridConfig.GRID_COLS:
 		print("Warning: Invalid cell position (", row, ", ", col, ")")
 		return
 
-	# Calculate cell center position
-	# Grid now covers full panel (600x750)
-	# Each cell is 120x150 px
-	var cell_size = Vector2(120, 150)
-	var cell_center = Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
+	# Calculate cell center position (dynamic based on GridConfig)
+	var cell_center = GridConfig.get_cell_center_position(row, col)
 
 	entity.position = cell_center
 	print("Placed entity at cell (", row, ", ", col, ") -> position ", cell_center)
 
 func get_cell_from_entity_position(entity: Node2D) -> Vector2i:
 	"""Get the grid cell coordinates from an entity's position"""
-	var cell_size = Vector2(120, 150)
+	var cell_size = GridConfig.get_cell_size()
 
 	var col = int(entity.position.x / cell_size.x)
 	var row = int(entity.position.y / cell_size.y)
 
 	# Clamp to valid range
-	col = clamp(col, 0, GRID_COLS - 1)
-	row = clamp(row, 0, GRID_ROWS - 1)
+	col = clamp(col, 0, GridConfig.GRID_COLS - 1)
+	row = clamp(row, 0, GridConfig.GRID_ROWS - 1)
 
 	return Vector2i(col, row)
 
@@ -584,8 +616,8 @@ func _on_cell_exited(row: int, col: int):
 
 func set_grid_interactive(enabled: bool):
 	"""Enable or disable grid cell interactivity"""
-	for row in range(GRID_ROWS):
-		for col in range(GRID_COLS):
+	for row in range(GridConfig.GRID_ROWS):
+		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.input_pickable = enabled
@@ -656,8 +688,7 @@ func get_grid_position_for_entity(entity_index: int, is_player: bool, total_enem
 
 func get_cell_center_position(row: int, col: int) -> Vector2:
 	"""Get the pixel position of a cell's center"""
-	var cell_size = Vector2(120, 150)
-	return Vector2(col * cell_size.x + cell_size.x / 2, row * cell_size.y + cell_size.y / 2)
+	return GridConfig.get_cell_center_position(row, col)
 
 func is_cell_occupied(row: int, col: int) -> bool:
 	"""Check if a cell is occupied by an entity (using new data model)"""
@@ -758,7 +789,7 @@ func get_valid_target_cells(card_type: String) -> Array:
 							continue
 						var target_row = player_cell.x + dr
 						var target_col = player_cell.y + dc
-						if target_row >= 0 and target_row < GRID_ROWS and target_col >= 0 and target_col < GRID_COLS:
+						if target_row >= 0 and target_row < GridConfig.GRID_ROWS and target_col >= 0 and target_col < GridConfig.GRID_COLS:
 							valid_cells.append(Vector2i(target_row, target_col))
 
 		"ranged_attack":
@@ -769,21 +800,21 @@ func get_valid_target_cells(card_type: String) -> Array:
 
 		"area_attack":
 			# All cells
-			for row in range(GRID_ROWS):
-				for col in range(GRID_COLS):
+			for row in range(GridConfig.GRID_ROWS):
+				for col in range(GridConfig.GRID_COLS):
 					valid_cells.append(Vector2i(row, col))
 
 		"placement":
 			# Empty cells only
-			for row in range(GRID_ROWS):
-				for col in range(GRID_COLS):
+			for row in range(GridConfig.GRID_ROWS):
+				for col in range(GridConfig.GRID_COLS):
 					if not is_cell_occupied(row, col):
 						valid_cells.append(Vector2i(row, col))
 
 		_:
 			# Default: all cells
-			for row in range(GRID_ROWS):
-				for col in range(GRID_COLS):
+			for row in range(GridConfig.GRID_ROWS):
+				for col in range(GridConfig.GRID_COLS):
 					valid_cells.append(Vector2i(row, col))
 
 	return valid_cells
