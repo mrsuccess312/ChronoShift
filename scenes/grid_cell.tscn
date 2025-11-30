@@ -6,14 +6,14 @@
 size = Vector2(100, 100)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
-bg_color = Color(0.95, 0.95, 0.95, 1)
+bg_color = Color(1, 1, 1, 0.05)
 corner_radius_top_left = 12
 corner_radius_top_right = 12
 corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
-shadow_color = Color(0, 0, 0, 0.15)
-shadow_size = 6
-shadow_offset = Vector2(0, 3)
+shadow_color = Color(0, 0, 0, 0.12)
+shadow_size = 4
+shadow_offset = Vector2(0, 2)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hover"]
 bg_color = Color(1, 1, 1, 0.5)
@@ -23,6 +23,8 @@ corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
 [node name="GridCell" type="Area2D"]
+z_index = -10
+z_as_relative = true
 input_pickable = true
 monitoring = true
 monitorable = true
