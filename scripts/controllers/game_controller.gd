@@ -179,29 +179,37 @@ func _setup_carousel() -> void:
 
 func _apply_panel_styling(panel: Panel, timeline_type: String, i: int) -> void:
 	"""Apply visual styling to panel based on timeline type"""
-	var stylebox = StyleBoxFlat.new()
-	stylebox.border_width_left = 2
-	stylebox.border_width_top = 2
-	stylebox.border_width_right = 2
-	stylebox.border_width_bottom = 2
+	# Get existing StyleBox from panel to preserve Fluent Design styling
+	var stylebox = panel.get_theme_stylebox("panel")
+	if stylebox and stylebox is StyleBoxFlat:
+		# Duplicate it so we don't modify the shared resource
+		stylebox = stylebox.duplicate()
+	else:
+		# Fallback: create new StyleBox with Fluent Design styling
+		stylebox = StyleBoxFlat.new()
+		# Apply Fluent Design properties
+		stylebox.corner_radius_top_left = 16
+		stylebox.corner_radius_top_right = 16
+		stylebox.corner_radius_bottom_right = 16
+		stylebox.corner_radius_bottom_left = 16
+		stylebox.shadow_color = Color(0, 0, 0, 0.25)
+		stylebox.shadow_size = 12
+		stylebox.shadow_offset = Vector2(0, 4)
 
+	# Apply timeline-specific colors
 	match timeline_type:
 		"past":
 			stylebox.bg_color = Color(0.24, 0.15, 0.08, 1)
-			stylebox.border_color = Color(0.55, 0.44, 0.28, 1)
 			_update_panel_label_text(panel, "⟲ PAST")
 		"present":
 			stylebox.bg_color = Color(0.12, 0.23, 0.37, 1)
-			stylebox.border_color = Color(0.29, 0.62, 1, 1)
 			_update_panel_label_text(panel, "◉ PRESENT")
 		"future":
 			stylebox.bg_color = Color(0.18, 0.11, 0.24, 1)
-			stylebox.border_color = Color(0.71, 0.48, 1, 1)
 			_update_panel_label_text(panel, "⟳ FUTURE")
 		"decorative":
 			# All decorative panels start with neutral gray/black colors
 			stylebox.bg_color = Color(0.1, 0.1, 0.1, 1)
-			stylebox.border_color = Color(0.3, 0.3, 0.3, 1)
 			_update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
@@ -596,33 +604,24 @@ func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void
 		return
 
 	if new_type == "past":
-		# Brown colors
+		# Brown color
 		var past_bg = Color(0.23921569, 0.14901961, 0.078431375, 1)
-		var past_border = Color(0.54509807, 0.43529412, 0.2784314, 1)
 		tween.tween_property(stylebox, "bg_color", past_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", past_border, 0.6)
 
 	elif new_type == "present":
-		# Blue colors
+		# Blue color
 		var present_bg = Color(0.11764706, 0.22745098, 0.37254903, 1)
-		var present_border = Color(0.2901961, 0.61960787, 1, 1)
 		tween.tween_property(stylebox, "bg_color", present_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", present_border, 0.6)
 
 	elif new_type == "future":
-		# Purple colors
+		# Purple color
 		var future_bg = Color(0.1764706, 0.105882354, 0.23921569, 1)
-		var future_border = Color(0.7058824, 0.47843137, 1, 1)
 		tween.tween_property(stylebox, "bg_color", future_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", future_border, 0.6)
 
 	elif new_type == "decorative":
-		# Decorative panels can be past or future colored
-		# For simplicity, use a neutral dark color
+		# Neutral dark color
 		var dec_bg = Color(0.1, 0.1, 0.1, 1)
-		var dec_border = Color(0.3, 0.3, 0.3, 1)
 		tween.tween_property(stylebox, "bg_color", dec_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", dec_border, 0.6)
 
 # ============================================================================
 # TIMELINE & STATE MANAGEMENT
