@@ -196,20 +196,20 @@ func _apply_panel_styling(panel: Panel, timeline_type: String, i: int) -> void:
 		stylebox.shadow_size = 12
 		stylebox.shadow_offset = Vector2(0, 4)
 
-	# Apply timeline-specific colors
+	# Apply timeline-specific colors (bright, cheerful palette)
 	match timeline_type:
 		"past":
-			stylebox.bg_color = Color(0.24, 0.15, 0.08, 1)
+			stylebox.bg_color = Color(0.72, 0.6, 0.48, 1)  # Bright tan/beige
 			_update_panel_label_text(panel, "⟲ PAST")
 		"present":
-			stylebox.bg_color = Color(0.12, 0.23, 0.37, 1)
+			stylebox.bg_color = Color(0.62, 0.74, 0.9, 1)  # Bright blue
 			_update_panel_label_text(panel, "◉ PRESENT")
 		"future":
-			stylebox.bg_color = Color(0.18, 0.11, 0.24, 1)
+			stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 			_update_panel_label_text(panel, "⟳ FUTURE")
 		"decorative":
-			# All decorative panels start with neutral gray/black colors
-			stylebox.bg_color = Color(0.1, 0.1, 0.1, 1)
+			# Bright blue-gray for decorative panels
+			stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)
 			_update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
@@ -604,23 +604,23 @@ func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void
 		return
 
 	if new_type == "past":
-		# Brown color
-		var past_bg = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		# Bright tan/beige
+		var past_bg = Color(0.72, 0.6, 0.48, 1)
 		tween.tween_property(stylebox, "bg_color", past_bg, 0.6)
 
 	elif new_type == "present":
-		# Blue color
-		var present_bg = Color(0.11764706, 0.22745098, 0.37254903, 1)
+		# Bright blue
+		var present_bg = Color(0.62, 0.74, 0.9, 1)
 		tween.tween_property(stylebox, "bg_color", present_bg, 0.6)
 
 	elif new_type == "future":
-		# Purple color
-		var future_bg = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		# Bright purple/violet
+		var future_bg = Color(0.7, 0.6, 0.82, 1)
 		tween.tween_property(stylebox, "bg_color", future_bg, 0.6)
 
 	elif new_type == "decorative":
-		# Neutral dark color
-		var dec_bg = Color(0.1, 0.1, 0.1, 1)
+		# Bright blue-gray
+		var dec_bg = Color(0.4, 0.5, 0.62, 1)
 		tween.tween_property(stylebox, "bg_color", dec_bg, 0.6)
 
 # ============================================================================

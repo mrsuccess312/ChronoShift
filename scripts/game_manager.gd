@@ -258,21 +258,21 @@ func apply_panel_styling(panel: Panel, timeline_type: String, i: int):
 		stylebox.shadow_size = 12
 		stylebox.shadow_offset = Vector2(0, 4)
 
-	# Apply timeline-specific colors
+	# Apply timeline-specific colors (bright, cheerful palette)
 	if timeline_type == "past":
-		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		stylebox.bg_color = Color(0.72, 0.6, 0.48, 1)  # Bright tan/beige
 		update_panel_label_text(panel, "⟲ PAST")
 	if timeline_type == "present":
-		stylebox.bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
+		stylebox.bg_color = Color(0.62, 0.74, 0.9, 1)  # Bright blue
 		update_panel_label_text(panel, "◉ PRESENT")
 	if timeline_type == "future":
-		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 		update_panel_label_text(panel, "⟳ FUTURE")
 	if timeline_type == "decorative" and i == 0:
-		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
+		stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)  # Bright blue-gray
 		update_panel_label_text(panel, "")
 	if timeline_type == "decorative" and i > 3:
-		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
+		stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)  # Bright blue-gray
 		update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
