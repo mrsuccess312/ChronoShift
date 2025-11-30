@@ -23,7 +23,6 @@ corner_radius_bottom_right = 12
 corner_radius_bottom_left = 12
 
 [node name="GridCell" type="Area2D"]
-z_index = 1
 z_as_relative = true
 input_pickable = true
 monitoring = true

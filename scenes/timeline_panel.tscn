@@ -43,8 +43,6 @@ vertical_alignment = 1
 
 [node name="GridContainer" type="Control" parent="."]
 clip_contents = true
-z_index = -1
-z_as_relative = true
 anchors_preset = 0
 offset_right = 600.0
 offset_bottom = 750.0
