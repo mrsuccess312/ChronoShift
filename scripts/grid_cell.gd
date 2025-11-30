@@ -11,6 +11,7 @@ var row: int = -1
 var col: int = -1
 var is_hovered: bool = false
 var hover_color: Color = Color(1, 1, 1, 0.3)  # Default hover color
+var cell_color: Color = Color(0, 0, 0, 0.15)  # Default cell background color
 
 @onready var background: Panel = $Background
 @onready var highlight: Panel = $Highlight
@@ -111,6 +112,14 @@ func _resize_cell_components():
 func set_hover_color(color: Color):
 	"""Set the hover color for this cell based on timeline type"""
 	hover_color = color
+
+func set_cell_color(color: Color):
+	"""Set the background color for this cell based on timeline type"""
+	cell_color = color
+	if background:
+		var style = background.get_theme_stylebox("panel")
+		if style is StyleBoxFlat:
+			style.bg_color = color
 
 func _on_mouse_entered():
 	"""Handle mouse entering cell with smooth fade-in and lift animation"""

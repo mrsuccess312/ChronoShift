@@ -127,11 +127,13 @@ func update_cell_hover_colors():
 		return
 
 	var hover_color = get_timeline_hover_color()
+	var cell_color = get_timeline_cell_color()
 	for row in range(GridConfig.GRID_ROWS):
 		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.set_hover_color(hover_color)
+				cell.set_cell_color(cell_color)
 
 # ===== TIMELINE VISIBILITY RULES =====
 
@@ -491,8 +493,9 @@ func setup_grid():
 			# Position cell (dynamic size based on GridConfig)
 			cell.position = GridConfig.get_cell_position(row, col)
 
-			# Set timeline-appropriate hover color
+			# Set timeline-appropriate colors
 			cell.set_hover_color(get_timeline_hover_color())
+			cell.set_cell_color(get_timeline_cell_color())
 
 			grid_container.add_child(cell)
 			grid_cells[row][col] = cell
@@ -510,6 +513,20 @@ func get_timeline_hover_color() -> Color:
 			return Color(0.7058824, 0.47843137, 1, 0.3)  # Purple
 		_:
 			return Color(1, 1, 1, 0.3)  # White default
+
+func get_timeline_cell_color() -> Color:
+	"""Get cell background color based on timeline type"""
+	match timeline_type:
+		"past":
+			return Color(0.58, 0.46, 0.34, 1)  # Darker tan for cells
+		"present":
+			return Color(0.48, 0.62, 0.8, 1)  # Darker blue for cells
+		"future":
+			return Color(0.58, 0.48, 0.72, 1)  # Darker purple for cells
+		"decorative":
+			return Color(0.3, 0.4, 0.52, 1)  # Darker blue-gray for cells
+		_:
+			return Color(0, 0, 0, 0.15)  # Default gray
 
 func get_cell_at_position(row: int, col: int):
 	"""Get grid cell at specific row/col coordinates"""

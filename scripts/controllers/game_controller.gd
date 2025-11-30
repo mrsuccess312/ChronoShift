@@ -598,30 +598,56 @@ func _sync_entities_to_state(panel: Panel) -> void:
 
 
 func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
-	"""Animate panel background color to match new timeline type"""
+	"""Animate panel background and cell colors to match new timeline type"""
 	var stylebox = panel.get_theme_stylebox("panel")
 	if not stylebox is StyleBoxFlat:
 		return
 
+	var panel_bg: Color
+	var cell_bg: Color
+
 	if new_type == "past":
-		# Bright tan/beige
-		var past_bg = Color(0.72, 0.6, 0.48, 1)
-		tween.tween_property(stylebox, "bg_color", past_bg, 0.6)
+		# Bright tan/beige panel, darker tan cells
+		panel_bg = Color(0.72, 0.6, 0.48, 1)
+		cell_bg = Color(0.58, 0.46, 0.34, 1)
 
 	elif new_type == "present":
-		# Bright blue
-		var present_bg = Color(0.62, 0.74, 0.9, 1)
-		tween.tween_property(stylebox, "bg_color", present_bg, 0.6)
+		# Bright blue panel, darker blue cells
+		panel_bg = Color(0.62, 0.74, 0.9, 1)
+		cell_bg = Color(0.48, 0.62, 0.8, 1)
 
 	elif new_type == "future":
-		# Bright purple/violet
-		var future_bg = Color(0.7, 0.6, 0.82, 1)
-		tween.tween_property(stylebox, "bg_color", future_bg, 0.6)
+		# Bright purple/violet panel, darker purple cells
+		panel_bg = Color(0.7, 0.6, 0.82, 1)
+		cell_bg = Color(0.58, 0.48, 0.72, 1)
 
 	elif new_type == "decorative":
-		# Bright blue-gray
-		var dec_bg = Color(0.4, 0.5, 0.62, 1)
-		tween.tween_property(stylebox, "bg_color", dec_bg, 0.6)
+		# Bright blue-gray panel, darker blue-gray cells
+		panel_bg = Color(0.4, 0.5, 0.62, 1)
+		cell_bg = Color(0.3, 0.4, 0.52, 1)
+	else:
+		return
+
+	# Animate panel background
+	tween.tween_property(stylebox, "bg_color", panel_bg, 0.6)
+
+	# Animate all cell backgrounds
+	_animate_cell_colors(tween, panel, cell_bg)
+
+
+func _animate_cell_colors(tween: Tween, panel: Panel, cell_color: Color) -> void:
+	"""Animate all grid cell colors in a panel"""
+	if not panel.has_node("GridContainer"):
+		return
+
+	var grid_container = panel.get_node("GridContainer")
+	for cell in grid_container.get_children():
+		if cell.has_node("Background"):
+			var bg_panel = cell.get_node("Background")
+			var cell_style = bg_panel.get_theme_stylebox("panel")
+			if cell_style is StyleBoxFlat:
+				tween.tween_property(cell_style, "bg_color", cell_color, 0.6)
+
 
 # ============================================================================
 # TIMELINE & STATE MANAGEMENT
