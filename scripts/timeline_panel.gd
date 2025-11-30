@@ -84,6 +84,14 @@ func _resize_panel_components():
 		grid_container.set_size(panel_size)
 		grid_container.size = panel_size
 
+	# Resize soft shadow
+	var soft_shadow = get_node_or_null("SoftShadow")
+	if soft_shadow:
+		soft_shadow.offset_left = -2.0
+		soft_shadow.offset_top = 2.0
+		soft_shadow.offset_right = panel_width + 2.0
+		soft_shadow.offset_bottom = panel_height + 6.0
+
 	print("Panel resized to: ", panel_size, " (", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS, " grid)")
 
 func initialize(type: String, slot: int):
