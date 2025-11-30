@@ -1,19 +1,19 @@
 shader_type canvas_item;
 
 // Adds a subtle vertical gradient shine for Fluent Design effect
-uniform float shine_intensity : hint_range(0.0, 1.0) = 0.15;
-uniform float gradient_position : hint_range(0.0, 1.0) = 0.3;
+uniform float shine_intensity : hint_range(0.0, 1.0) = 0.12;
+uniform float gradient_height : hint_range(0.0, 1.0) = 0.5;
 
 void fragment() {
 	// Get the current pixel color
 	vec4 color = texture(TEXTURE, UV);
 
-	// Create vertical gradient (brighter at top, darker at bottom)
-	float gradient = smoothstep(0.0, gradient_position, 1.0 - UV.y);
+	// Create vertical gradient (brighter at top, fades down)
+	// UV.y = 0 at top, 1 at bottom
+	float gradient = smoothstep(gradient_height, 0.0, UV.y);
 
-	// Apply subtle shine overlay
-	vec3 shine = vec3(1.0) * gradient * shine_intensity;
-	color.rgb += shine * color.a;
+	// Apply subtle white shine overlay
+	color.rgb += vec3(gradient * shine_intensity);
 
 	COLOR = color;
 }
