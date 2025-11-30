@@ -92,6 +92,12 @@ func _resize_panel_components():
 		soft_shadow.offset_right = panel_width + 2.0
 		soft_shadow.offset_bottom = panel_height + 6.0
 
+	# Resize shine overlay
+	var shine_overlay = get_node_or_null("ShineOverlay")
+	if shine_overlay:
+		shine_overlay.offset_right = panel_width
+		shine_overlay.offset_bottom = panel_height
+
 	print("Panel resized to: ", panel_size, " (", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS, " grid)")
 
 func initialize(type: String, slot: int):
