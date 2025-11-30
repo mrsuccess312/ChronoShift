@@ -11,6 +11,7 @@ border_width_bottom = 2
 border_color = Color(0.2901961, 0.61960787, 1, 1)
 
 [node name="TimelinePanel" type="Panel"]
+clip_contents = true
 offset_right = 600.0
 offset_bottom = 750.0
 pivot_offset = Vector2(300, 375)
@@ -42,6 +43,8 @@ vertical_alignment = 1
 
 [node name="GridContainer" type="Control" parent="."]
 clip_contents = true
+z_index = -1
+z_as_relative = true
 anchors_preset = 0
 offset_right = 600.0
 offset_bottom = 750.0
