@@ -1,12 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://c8vx7k2n3naqr"]
+[gd_scene load_steps=3 format=3 uid="uid://c8vx7k2n3naqr"]
 
 [ext_resource type="Script" uid="uid://cne6rx0okhiq6" path="res://scripts/timeline_panel.gd" id="1_timeline"]
-[ext_resource type="Shader" path="res://shaders/panel_shine.gdshader" id="2_shine"]
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_shine"]
-shader = ExtResource("2_shine")
-shader_parameter/shine_intensity = 0.15
-shader_parameter/gradient_height = 0.6
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_timeline"]
 bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
@@ -14,20 +8,11 @@ corner_radius_top_left = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_bottom_left = 16
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_shadow"]
-bg_color = Color(0, 0, 0, 0.15)
-corner_radius_top_left = 18
-corner_radius_top_right = 18
-corner_radius_bottom_right = 18
-corner_radius_bottom_left = 18
-expand_margin_left = 8.0
-expand_margin_top = 0.0
-expand_margin_right = 8.0
-expand_margin_bottom = 12.0
+shadow_color = Color(0, 0, 0, 0.25)
+shadow_size = 12
+shadow_offset = Vector2(0, 4)
 
 [node name="TimelinePanel" type="Panel"]
-material = SubResource("ShaderMaterial_shine")
 clip_contents = true
 offset_right = 600.0
 offset_bottom = 750.0
@@ -35,15 +20,6 @@ pivot_offset = Vector2(300, 375)
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_timeline")
 script = ExtResource("1_timeline")
-
-[node name="SoftShadow" type="Panel" parent="."]
-show_behind_parent = true
-offset_left = 0.0
-offset_top = 4.0
-offset_right = 600.0
-offset_bottom = 754.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_shadow")
 
 [node name="GridContainer" type="Control" parent="."]
 clip_contents = true
