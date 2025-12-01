@@ -208,8 +208,8 @@ func _apply_panel_styling(panel: Panel, timeline_type: String, i: int) -> void:
 			stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 			_update_panel_label_text(panel, "⟳ FUTURE")
 		"decorative":
-			# Bright blue-gray for decorative panels
-			stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)
+			# Dark gray/black for decorative panels
+			stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)
 			_update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
@@ -622,9 +622,9 @@ func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void
 		cell_bg = Color(0.58, 0.48, 0.72, 1)
 
 	elif new_type == "decorative":
-		# Bright blue-gray panel, darker blue-gray cells
-		panel_bg = Color(0.4, 0.5, 0.62, 1)
-		cell_bg = Color(0.3, 0.4, 0.52, 1)
+		# Dark gray/black panel and cells
+		panel_bg = Color(0.15, 0.18, 0.22, 1)
+		cell_bg = Color(0.1, 0.12, 0.15, 1)
 	else:
 		return
 

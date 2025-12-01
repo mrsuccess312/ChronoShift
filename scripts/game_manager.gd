@@ -269,10 +269,10 @@ func apply_panel_styling(panel: Panel, timeline_type: String, i: int):
 		stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 		update_panel_label_text(panel, "⟳ FUTURE")
 	if timeline_type == "decorative" and i == 0:
-		stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)  # Bright blue-gray
+		stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)  # Dark gray/black
 		update_panel_label_text(panel, "")
 	if timeline_type == "decorative" and i > 3:
-		stylebox.bg_color = Color(0.4, 0.5, 0.62, 1)  # Bright blue-gray
+		stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)  # Dark gray/black
 		update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)

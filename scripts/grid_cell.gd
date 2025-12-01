@@ -119,7 +119,10 @@ func set_cell_color(color: Color):
 	if background:
 		var style = background.get_theme_stylebox("panel")
 		if style is StyleBoxFlat:
-			style.bg_color = color
+			# Duplicate the StyleBox to avoid modifying shared resource
+			var new_style = style.duplicate()
+			new_style.bg_color = color
+			background.add_theme_stylebox_override("panel", new_style)
 
 func _on_mouse_entered():
 	"""Handle mouse entering cell with smooth fade-in and lift animation"""

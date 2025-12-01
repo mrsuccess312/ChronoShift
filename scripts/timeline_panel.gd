@@ -524,7 +524,7 @@ func get_timeline_cell_color() -> Color:
 		"future":
 			return Color(0.58, 0.48, 0.72, 1)  # Darker purple for cells
 		"decorative":
-			return Color(0.3, 0.4, 0.52, 1)  # Darker blue-gray for cells
+			return Color(0.1, 0.12, 0.15, 1)  # Dark gray/black for cells
 		_:
 			return Color(0, 0, 0, 0.15)  # Default gray
 
