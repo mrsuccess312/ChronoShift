@@ -605,48 +605,58 @@ func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void
 
 	var panel_bg: Color
 	var cell_bg: Color
+	var hover_color: Color
 
 	if new_type == "past":
-		# Bright tan/beige panel, darker tan cells
+		# Bright tan/beige panel, darker tan cells, brown hover
 		panel_bg = Color(0.72, 0.6, 0.48, 1)
 		cell_bg = Color(0.58, 0.46, 0.34, 1)
+		hover_color = Color(0.54509807, 0.43529412, 0.2784314, 0.3)
 
 	elif new_type == "present":
-		# Bright blue panel, darker blue cells
+		# Bright blue panel, darker blue cells, blue hover
 		panel_bg = Color(0.62, 0.74, 0.9, 1)
 		cell_bg = Color(0.48, 0.62, 0.8, 1)
+		hover_color = Color(0.2901961, 0.61960787, 1, 0.3)
 
 	elif new_type == "future":
-		# Bright purple/violet panel, darker purple cells
+		# Bright purple/violet panel, darker purple cells, purple hover
 		panel_bg = Color(0.7, 0.6, 0.82, 1)
 		cell_bg = Color(0.58, 0.48, 0.72, 1)
+		hover_color = Color(0.7058824, 0.47843137, 1, 0.3)
 
 	elif new_type == "decorative":
-		# Dark gray/black panel and cells
+		# Dark gray/black panel and cells, white hover
 		panel_bg = Color(0.15, 0.18, 0.22, 1)
 		cell_bg = Color(0.1, 0.12, 0.15, 1)
+		hover_color = Color(1, 1, 1, 0.3)
 	else:
 		return
 
 	# Animate panel background
 	tween.tween_property(stylebox, "bg_color", panel_bg, 0.6)
 
-	# Animate all cell backgrounds
-	_animate_cell_colors(tween, panel, cell_bg)
+	# Animate all cell backgrounds and hover colors
+	_animate_cell_colors(tween, panel, cell_bg, hover_color)
 
 
-func _animate_cell_colors(tween: Tween, panel: Panel, cell_color: Color) -> void:
-	"""Animate all grid cell colors in a panel"""
+func _animate_cell_colors(tween: Tween, panel: Panel, cell_color: Color, hover_color: Color) -> void:
+	"""Animate all grid cell colors and hover colors in a panel"""
 	if not panel.has_node("GridContainer"):
 		return
 
 	var grid_container = panel.get_node("GridContainer")
 	for cell in grid_container.get_children():
+		# Update cell background color
 		if cell.has_node("Background"):
 			var bg_panel = cell.get_node("Background")
 			var cell_style = bg_panel.get_theme_stylebox("panel")
 			if cell_style is StyleBoxFlat:
 				tween.tween_property(cell_style, "bg_color", cell_color, 0.6)
+
+		# Update hover color (instant, not animated, since it's only visible on hover)
+		if cell.has_method("set_hover_color"):
+			cell.set_hover_color(hover_color)
 
 
 # ============================================================================
