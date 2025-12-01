@@ -1,50 +1,76 @@
-[gd_scene load_steps=3 format=3 uid="uid://bq8n3m5k7j2vx"]
+[gd_scene load_steps=5 format=3 uid="uid://bq8n3m5k7j2vx"]
 
 [ext_resource type="Script" path="res://scripts/grid_cell.gd" id="1_gridcell"]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_cell"]
-size = Vector2(120, 150)
+size = Vector2(100, 100)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_background"]
+bg_color = Color(0, 0, 0, 0.15)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+shadow_color = Color(0, 0, 0, 0.12)
+shadow_size = 4
+shadow_offset = Vector2(0, 2)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hover"]
+bg_color = Color(1, 1, 1, 0.5)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
 
 [node name="GridCell" type="Area2D"]
+z_as_relative = true
 input_pickable = true
 monitoring = true
 monitorable = true
 script = ExtResource("1_gridcell")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(60, 75)
+position = Vector2(50, 50)
 shape = SubResource("RectangleShape2D_cell")
 
-[node name="Highlight" type="ColorRect" parent="."]
-offset_right = 120.0
-offset_bottom = 150.0
+[node name="Background" type="Panel" parent="."]
+offset_right = 100.0
+offset_bottom = 100.0
 mouse_filter = 2
-color = Color(1, 1, 1, 0.3)
+theme_override_styles/panel = SubResource("StyleBoxFlat_background")
+
+[node name="Highlight" type="Panel" parent="."]
+visible = false
+modulate = Color(1, 1, 1, 0)
+offset_right = 100.0
+offset_bottom = 100.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_hover")
 
 [node name="GridLines" type="Control" parent="."]
 layout_mode = 0
-offset_right = 120.0
-offset_bottom = 150.0
+offset_right = 100.0
+offset_bottom = 100.0
 mouse_filter = 2
 
 [node name="RightLine" type="ColorRect" parent="GridLines"]
 layout_mode = 0
-offset_left = 119.0
-offset_right = 120.0
-offset_bottom = 150.0
+offset_left = 99.0
+offset_right = 100.0
+offset_bottom = 100.0
 color = Color(1, 1, 1, 0.1)
 
 [node name="BottomLine" type="ColorRect" parent="GridLines"]
 layout_mode = 0
-offset_top = 149.0
-offset_right = 120.0
-offset_bottom = 150.0
+offset_top = 99.0
+offset_right = 100.0
+offset_bottom = 100.0
 color = Color(1, 1, 1, 0.1)
 
 [node name="DebugLabel" type="Label" parent="."]
 layout_mode = 0
-offset_right = 120.0
-offset_bottom = 150.0
+offset_right = 100.0
+offset_bottom = 100.0
 theme_override_colors/font_color = Color(1, 1, 0, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2

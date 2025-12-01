@@ -241,31 +241,38 @@ func setup_carousel():
 
 func apply_panel_styling(panel: Panel, timeline_type: String, i: int):
 	"""Apply visual styling to panel based on timeline type"""
-	var stylebox = StyleBoxFlat.new()
-	stylebox.border_width_left = 2
-	stylebox.border_width_top = 2
-	stylebox.border_width_right = 2
-	stylebox.border_width_bottom = 2
+	# Get existing StyleBox from panel to preserve Fluent Design styling
+	var stylebox = panel.get_theme_stylebox("panel")
+	if stylebox and stylebox is StyleBoxFlat:
+		# Duplicate it so we don't modify the shared resource
+		stylebox = stylebox.duplicate()
+	else:
+		# Fallback: create new StyleBox with Fluent Design styling
+		stylebox = StyleBoxFlat.new()
+		# Apply Fluent Design properties
+		stylebox.corner_radius_top_left = 16
+		stylebox.corner_radius_top_right = 16
+		stylebox.corner_radius_bottom_right = 16
+		stylebox.corner_radius_bottom_left = 16
+		stylebox.shadow_color = Color(0, 0, 0, 0.25)
+		stylebox.shadow_size = 12
+		stylebox.shadow_offset = Vector2(0, 4)
 
+	# Apply timeline-specific colors (bright, cheerful palette)
 	if timeline_type == "past":
-		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
-		stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		stylebox.bg_color = Color(0.72, 0.6, 0.48, 1)  # Bright tan/beige
 		update_panel_label_text(panel, "⟲ PAST")
 	if timeline_type == "present":
-		stylebox.bg_color = Color(0.11764706, 0.22745098, 0.37254903, 1)
-		stylebox.border_color = Color(0.2901961, 0.61960787, 1, 1)
+		stylebox.bg_color = Color(0.62, 0.74, 0.9, 1)  # Bright blue
 		update_panel_label_text(panel, "◉ PRESENT")
 	if timeline_type == "future":
-		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
-		stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+		stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 		update_panel_label_text(panel, "⟳ FUTURE")
 	if timeline_type == "decorative" and i == 0:
-		stylebox.bg_color = Color(0.23921569, 0.14901961, 0.078431375, 1)
-		stylebox.border_color = Color(0.54509807, 0.43529412, 0.2784314, 1)
+		stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)  # Dark gray/black
 		update_panel_label_text(panel, "")
 	if timeline_type == "decorative" and i > 3:
-		stylebox.bg_color = Color(0.1764706, 0.105882354, 0.23921569, 1)
-		stylebox.border_color = Color(0.7058824, 0.47843137, 1, 1)
+		stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)  # Dark gray/black
 		update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)

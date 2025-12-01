@@ -31,36 +31,56 @@ static var PANEL_WIDTH: float = 600.0
 ## Change this value to resize the panel vertically
 static var PANEL_HEIGHT: float = 750.0
 
+## Cell size in pixels (always square)
+## Change this value to resize individual cells
+## Spacing between cells will be calculated automatically
+static var CELL_SIZE: float = 100.0
+
 # ==============================================================================
 # CALCULATED PROPERTIES
 # ==============================================================================
 
-## Get the width of a single cell (calculated from panel width and column count)
+## Get the width of a single cell (always square, same as CELL_SIZE)
 static func get_cell_width() -> float:
-	return PANEL_WIDTH / float(GRID_COLS)
+	return CELL_SIZE
 
-## Get the height of a single cell (calculated from panel height and row count)
+## Get the height of a single cell (always square, same as CELL_SIZE)
 static func get_cell_height() -> float:
-	return PANEL_HEIGHT / float(GRID_ROWS)
+	return CELL_SIZE
 
-## Get cell size as Vector2
+## Get cell size as Vector2 (always square)
 static func get_cell_size() -> Vector2:
-	return Vector2(get_cell_width(), get_cell_height())
+	return Vector2(CELL_SIZE, CELL_SIZE)
+
+## Get horizontal spacing between cells
+## Formula: (PANEL_WIDTH - (GRID_COLS * CELL_SIZE)) / (GRID_COLS + 1)
+static func get_horizontal_spacing() -> float:
+	return (PANEL_WIDTH - (GRID_COLS * CELL_SIZE)) / float(GRID_COLS + 1)
+
+## Get vertical spacing between cells
+## Formula: (PANEL_HEIGHT - (GRID_ROWS * CELL_SIZE)) / (GRID_ROWS + 1)
+static func get_vertical_spacing() -> float:
+	return (PANEL_HEIGHT - (GRID_ROWS * CELL_SIZE)) / float(GRID_ROWS + 1)
 
 ## Get panel size as Vector2
 static func get_panel_size() -> Vector2:
 	return Vector2(PANEL_WIDTH, PANEL_HEIGHT)
 
-## Get cell position for given row and column
+## Get cell position for given row and column (includes spacing)
 static func get_cell_position(row: int, col: int) -> Vector2:
-	return Vector2(col * get_cell_width(), row * get_cell_height())
+	var h_spacing = get_horizontal_spacing()
+	var v_spacing = get_vertical_spacing()
+	return Vector2(
+		h_spacing + col * (CELL_SIZE + h_spacing),
+		v_spacing + row * (CELL_SIZE + v_spacing)
+	)
 
 ## Get cell center position for given row and column
 static func get_cell_center_position(row: int, col: int) -> Vector2:
-	var cell_size = get_cell_size()
+	var cell_pos = get_cell_position(row, col)
 	return Vector2(
-		col * cell_size.x + cell_size.x / 2.0,
-		row * cell_size.y + cell_size.y / 2.0
+		cell_pos.x + CELL_SIZE / 2.0,
+		cell_pos.y + CELL_SIZE / 2.0
 	)
 
 ## Validate that a row index is within bounds
@@ -88,38 +108,45 @@ static func apply_preset(preset_name: String) -> void:
 			GRID_COLS = 5
 			PANEL_WIDTH = 600.0
 			PANEL_HEIGHT = 750.0
+			CELL_SIZE = 100.0
 		"small":
 			GRID_ROWS = 3
 			GRID_COLS = 3
 			PANEL_WIDTH = 450.0
 			PANEL_HEIGHT = 450.0
+			CELL_SIZE = 120.0
 		"medium":
 			GRID_ROWS = 4
 			GRID_COLS = 4
 			PANEL_WIDTH = 600.0
 			PANEL_HEIGHT = 600.0
+			CELL_SIZE = 120.0
 		"large":
 			GRID_ROWS = 6
 			GRID_COLS = 6
 			PANEL_WIDTH = 720.0
 			PANEL_HEIGHT = 900.0
+			CELL_SIZE = 100.0
 		"wide":
 			GRID_ROWS = 4
 			GRID_COLS = 8
 			PANEL_WIDTH = 960.0
 			PANEL_HEIGHT = 600.0
+			CELL_SIZE = 100.0
 		"tall":
 			GRID_ROWS = 8
 			GRID_COLS = 4
 			PANEL_WIDTH = 480.0
 			PANEL_HEIGHT = 1200.0
+			CELL_SIZE = 100.0
 		_:
 			push_warning("Unknown preset: " + preset_name + ". Using current configuration.")
 
 ## Get information about current configuration
 static func get_config_info() -> String:
-	return "Grid: %dx%d | Panel: %.0fx%.0f | Cell: %.1fx%.1f" % [
+	return "Grid: %dx%d | Panel: %.0fx%.0f | Cell: %.0fpx | Spacing: %.1fx%.1f" % [
 		GRID_COLS, GRID_ROWS,
 		PANEL_WIDTH, PANEL_HEIGHT,
-		get_cell_width(), get_cell_height()
+		CELL_SIZE,
+		get_horizontal_spacing(), get_vertical_spacing()
 	]

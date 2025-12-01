@@ -38,7 +38,6 @@ var base_position_y: float = 0.0  # Original Y position
 var current_hover_offset: float = 0.0
 
 @onready var grid_container: Control = $GridContainer
-@onready var shadow: ColorRect = $Shadow
 
 func _ready():
 	"""Setup grid when panel is added to scene"""
@@ -80,22 +79,10 @@ func _resize_panel_components():
 	# Update pivot offset (center of panel for rotation/scaling)
 	pivot_offset = Vector2(panel_width / 2, panel_height / 2)
 
-	# Resize shadow (10px offset from panel)
-	if shadow:
-		shadow.offset_left = 10.0
-		shadow.offset_top = 10.0
-		shadow.offset_right = panel_width + 10.0
-		shadow.offset_bottom = panel_height + 10.0
-
 	# Resize grid container
 	if grid_container:
 		grid_container.set_size(panel_size)
 		grid_container.size = panel_size
-
-	# Update panel label width
-	var panel_label = get_node_or_null("PanelLabel")
-	if panel_label:
-		panel_label.offset_right = panel_width
 
 	print("Panel resized to: ", panel_size, " (", GridConfig.GRID_COLS, "x", GridConfig.GRID_ROWS, " grid)")
 
@@ -119,17 +106,6 @@ func _process(delta: float):
 	# Apply vertical offset to panel
 	position.y = base_position_y + current_hover_offset
 
-	# Update shadow position (moves opposite to panel)
-	if shadow:
-		# Shadow moves down when panel moves up, and vice versa
-		shadow.position.y = 10.0 - current_hover_offset
-
-		# Shadow opacity increases when panel is higher (looks more elevated)
-		# Map hover offset (-amplitude to +amplitude) to opacity (0.2 to 0.4)
-		var normalized_height = (current_hover_offset + hover_amplitude) / (hover_amplitude * 2.0)
-		var shadow_opacity = lerp(0.2, 0.4, normalized_height)
-		shadow.modulate.a = shadow_opacity
-
 func start_hover_animation():
 	"""Enable hover animation for this panel"""
 	hover_enabled = true
@@ -142,11 +118,6 @@ func stop_hover_animation():
 	position.y = base_position_y
 	current_hover_offset = 0.0
 
-	# Reset shadow to default
-	if shadow:
-		shadow.position.y = 10.0
-		shadow.modulate.a = 0.3
-
 	print("  Hover animation stopped for ", timeline_type, " panel")
 
 func update_cell_hover_colors():
@@ -156,11 +127,13 @@ func update_cell_hover_colors():
 		return
 
 	var hover_color = get_timeline_hover_color()
+	var cell_color = get_timeline_cell_color()
 	for row in range(GridConfig.GRID_ROWS):
 		for col in range(GridConfig.GRID_COLS):
 			var cell = grid_cells[row][col]
 			if cell:
 				cell.set_hover_color(hover_color)
+				cell.set_cell_color(cell_color)
 
 # ===== TIMELINE VISIBILITY RULES =====
 
@@ -520,8 +493,9 @@ func setup_grid():
 			# Position cell (dynamic size based on GridConfig)
 			cell.position = GridConfig.get_cell_position(row, col)
 
-			# Set timeline-appropriate hover color
+			# Set timeline-appropriate colors
 			cell.set_hover_color(get_timeline_hover_color())
+			cell.set_cell_color(get_timeline_cell_color())
 
 			grid_container.add_child(cell)
 			grid_cells[row][col] = cell
@@ -539,6 +513,20 @@ func get_timeline_hover_color() -> Color:
 			return Color(0.7058824, 0.47843137, 1, 0.3)  # Purple
 		_:
 			return Color(1, 1, 1, 0.3)  # White default
+
+func get_timeline_cell_color() -> Color:
+	"""Get cell background color based on timeline type"""
+	match timeline_type:
+		"past":
+			return Color(0.58, 0.46, 0.34, 1)  # Darker tan for cells
+		"present":
+			return Color(0.48, 0.62, 0.8, 1)  # Darker blue for cells
+		"future":
+			return Color(0.58, 0.48, 0.72, 1)  # Darker purple for cells
+		"decorative":
+			return Color(0.1, 0.12, 0.15, 1)  # Dark gray/black for cells
+		_:
+			return Color(0, 0, 0, 0.15)  # Default gray
 
 func get_cell_at_position(row: int, col: int):
 	"""Get grid cell at specific row/col coordinates"""

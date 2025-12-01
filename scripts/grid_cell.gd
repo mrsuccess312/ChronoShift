@@ -11,8 +11,10 @@ var row: int = -1
 var col: int = -1
 var is_hovered: bool = false
 var hover_color: Color = Color(1, 1, 1, 0.3)  # Default hover color
+var cell_color: Color = Color(0, 0, 0, 0.15)  # Default cell background color
 
-@onready var highlight: ColorRect = $Highlight
+@onready var background: Panel = $Background
+@onready var highlight: Panel = $Highlight
 @onready var collision_shape: CollisionShape2D = $CollisionShape2D
 @onready var grid_lines: Control = $GridLines
 @onready var debug_label: Label = $DebugLabel
@@ -70,7 +72,13 @@ func _resize_cell_components():
 		collision_shape.shape.size = cell_size
 		collision_shape.position = Vector2(cell_width / 2, cell_height / 2)
 
-	# Resize highlight ColorRect
+	# Resize background Panel
+	if background:
+		background.size = cell_size
+		background.offset_right = cell_width
+		background.offset_bottom = cell_height
+
+	# Resize highlight Panel
 	if highlight:
 		highlight.size = cell_size
 		highlight.offset_right = cell_width
@@ -105,31 +113,59 @@ func set_hover_color(color: Color):
 	"""Set the hover color for this cell based on timeline type"""
 	hover_color = color
 
+func set_cell_color(color: Color):
+	"""Set the background color for this cell based on timeline type"""
+	cell_color = color
+	if background:
+		var style = background.get_theme_stylebox("panel")
+		if style is StyleBoxFlat:
+			# Duplicate the StyleBox to avoid modifying shared resource
+			var new_style = style.duplicate()
+			new_style.bg_color = color
+			background.add_theme_stylebox_override("panel", new_style)
+
 func _on_mouse_entered():
-	"""Handle mouse entering cell with smooth fade-in"""
+	"""Handle mouse entering cell with smooth fade-in and lift animation"""
 	is_hovered = true
 	print("DEBUG: Mouse entered cell (", row, ", ", col, ")")
 
-	# Fade in highlight
+	# Create parallel tweens for smooth animation
+	var tween = create_tween()
+	tween.set_parallel(true)
+
+	# Fade in highlight with custom color
 	if highlight:
-		highlight.color = hover_color
+		# Update highlight color via StyleBox
+		var style = highlight.get_theme_stylebox("panel")
+		if style is StyleBoxFlat:
+			style.bg_color = hover_color
 		highlight.visible = true
 		print("DEBUG: Highlight visible, color = ", hover_color)
+		tween.tween_property(highlight, "modulate:a", 1.0, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
-		var tween = create_tween()
-		tween.tween_property(highlight, "modulate:a", 0.3, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# Subtle scale-up for lift effect (1.0 → 1.03)
+	tween.tween_property(self, "scale", Vector2(1.03, 1.03), 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 	cell_hovered.emit(row, col)
 
 func _on_mouse_exited():
-	"""Handle mouse exiting cell with smooth fade-out"""
+	"""Handle mouse exiting cell with smooth fade-out and return to original scale"""
 	is_hovered = false
+
+	# Create parallel tweens for smooth animation
+	var tween = create_tween()
+	tween.set_parallel(true)
 
 	# Fade out highlight
 	if highlight:
-		var tween = create_tween()
-		tween.tween_property(highlight, "modulate:a", 0.0, 0.15).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		await tween.finished
+		tween.tween_property(highlight, "modulate:a", 0.0, 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+
+	# Return to original scale
+	tween.tween_property(self, "scale", Vector2(1.0, 1.0), 0.2).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+
+	# Hide highlight after animation
+	await tween.finished
+	if highlight:
 		highlight.visible = false
 
 	cell_exited.emit(row, col)
@@ -151,9 +187,12 @@ func play_click_animation():
 func show_highlight(color: Color = Color(1, 1, 1, 0.3)):
 	"""Show cell highlight with optional color (for manual highlighting)"""
 	if highlight:
-		highlight.color = color
+		# Update highlight color via StyleBox
+		var style = highlight.get_theme_stylebox("panel")
+		if style is StyleBoxFlat:
+			style.bg_color = color
 		highlight.visible = true
-		highlight.modulate.a = 0.3
+		highlight.modulate.a = 1.0
 
 func hide_highlight():
 	"""Hide cell highlight (for manual highlighting)"""

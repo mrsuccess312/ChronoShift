@@ -179,29 +179,37 @@ func _setup_carousel() -> void:
 
 func _apply_panel_styling(panel: Panel, timeline_type: String, i: int) -> void:
 	"""Apply visual styling to panel based on timeline type"""
-	var stylebox = StyleBoxFlat.new()
-	stylebox.border_width_left = 2
-	stylebox.border_width_top = 2
-	stylebox.border_width_right = 2
-	stylebox.border_width_bottom = 2
+	# Get existing StyleBox from panel to preserve Fluent Design styling
+	var stylebox = panel.get_theme_stylebox("panel")
+	if stylebox and stylebox is StyleBoxFlat:
+		# Duplicate it so we don't modify the shared resource
+		stylebox = stylebox.duplicate()
+	else:
+		# Fallback: create new StyleBox with Fluent Design styling
+		stylebox = StyleBoxFlat.new()
+		# Apply Fluent Design properties
+		stylebox.corner_radius_top_left = 16
+		stylebox.corner_radius_top_right = 16
+		stylebox.corner_radius_bottom_right = 16
+		stylebox.corner_radius_bottom_left = 16
+		stylebox.shadow_color = Color(0, 0, 0, 0.25)
+		stylebox.shadow_size = 12
+		stylebox.shadow_offset = Vector2(0, 4)
 
+	# Apply timeline-specific colors (bright, cheerful palette)
 	match timeline_type:
 		"past":
-			stylebox.bg_color = Color(0.24, 0.15, 0.08, 1)
-			stylebox.border_color = Color(0.55, 0.44, 0.28, 1)
+			stylebox.bg_color = Color(0.72, 0.6, 0.48, 1)  # Bright tan/beige
 			_update_panel_label_text(panel, "⟲ PAST")
 		"present":
-			stylebox.bg_color = Color(0.12, 0.23, 0.37, 1)
-			stylebox.border_color = Color(0.29, 0.62, 1, 1)
+			stylebox.bg_color = Color(0.62, 0.74, 0.9, 1)  # Bright blue
 			_update_panel_label_text(panel, "◉ PRESENT")
 		"future":
-			stylebox.bg_color = Color(0.18, 0.11, 0.24, 1)
-			stylebox.border_color = Color(0.71, 0.48, 1, 1)
+			stylebox.bg_color = Color(0.7, 0.6, 0.82, 1)  # Bright purple/violet
 			_update_panel_label_text(panel, "⟳ FUTURE")
 		"decorative":
-			# All decorative panels start with neutral gray/black colors
-			stylebox.bg_color = Color(0.1, 0.1, 0.1, 1)
-			stylebox.border_color = Color(0.3, 0.3, 0.3, 1)
+			# Dark gray/black for decorative panels
+			stylebox.bg_color = Color(0.15, 0.18, 0.22, 1)
 			_update_panel_label_text(panel, "")
 
 	panel.add_theme_stylebox_override("panel", stylebox)
@@ -590,39 +598,66 @@ func _sync_entities_to_state(panel: Panel) -> void:
 
 
 func _animate_panel_colors(tween: Tween, panel: Panel, new_type: String) -> void:
-	"""Animate panel background color to match new timeline type"""
+	"""Animate panel background and cell colors to match new timeline type"""
 	var stylebox = panel.get_theme_stylebox("panel")
 	if not stylebox is StyleBoxFlat:
 		return
 
+	var panel_bg: Color
+	var cell_bg: Color
+	var hover_color: Color
+
 	if new_type == "past":
-		# Brown colors
-		var past_bg = Color(0.23921569, 0.14901961, 0.078431375, 1)
-		var past_border = Color(0.54509807, 0.43529412, 0.2784314, 1)
-		tween.tween_property(stylebox, "bg_color", past_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", past_border, 0.6)
+		# Bright tan/beige panel, darker tan cells, brown hover
+		panel_bg = Color(0.72, 0.6, 0.48, 1)
+		cell_bg = Color(0.58, 0.46, 0.34, 1)
+		hover_color = Color(0.54509807, 0.43529412, 0.2784314, 0.3)
 
 	elif new_type == "present":
-		# Blue colors
-		var present_bg = Color(0.11764706, 0.22745098, 0.37254903, 1)
-		var present_border = Color(0.2901961, 0.61960787, 1, 1)
-		tween.tween_property(stylebox, "bg_color", present_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", present_border, 0.6)
+		# Bright blue panel, darker blue cells, blue hover
+		panel_bg = Color(0.62, 0.74, 0.9, 1)
+		cell_bg = Color(0.48, 0.62, 0.8, 1)
+		hover_color = Color(0.2901961, 0.61960787, 1, 0.3)
 
 	elif new_type == "future":
-		# Purple colors
-		var future_bg = Color(0.1764706, 0.105882354, 0.23921569, 1)
-		var future_border = Color(0.7058824, 0.47843137, 1, 1)
-		tween.tween_property(stylebox, "bg_color", future_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", future_border, 0.6)
+		# Bright purple/violet panel, darker purple cells, purple hover
+		panel_bg = Color(0.7, 0.6, 0.82, 1)
+		cell_bg = Color(0.58, 0.48, 0.72, 1)
+		hover_color = Color(0.7058824, 0.47843137, 1, 0.3)
 
 	elif new_type == "decorative":
-		# Decorative panels can be past or future colored
-		# For simplicity, use a neutral dark color
-		var dec_bg = Color(0.1, 0.1, 0.1, 1)
-		var dec_border = Color(0.3, 0.3, 0.3, 1)
-		tween.tween_property(stylebox, "bg_color", dec_bg, 0.6)
-		tween.tween_property(stylebox, "border_color", dec_border, 0.6)
+		# Dark gray/black panel and cells, white hover
+		panel_bg = Color(0.15, 0.18, 0.22, 1)
+		cell_bg = Color(0.1, 0.12, 0.15, 1)
+		hover_color = Color(1, 1, 1, 0.3)
+	else:
+		return
+
+	# Animate panel background
+	tween.tween_property(stylebox, "bg_color", panel_bg, 0.6)
+
+	# Animate all cell backgrounds and hover colors
+	_animate_cell_colors(tween, panel, cell_bg, hover_color)
+
+
+func _animate_cell_colors(tween: Tween, panel: Panel, cell_color: Color, hover_color: Color) -> void:
+	"""Animate all grid cell colors and hover colors in a panel"""
+	if not panel.has_node("GridContainer"):
+		return
+
+	var grid_container = panel.get_node("GridContainer")
+	for cell in grid_container.get_children():
+		# Update cell background color
+		if cell.has_node("Background"):
+			var bg_panel = cell.get_node("Background")
+			var cell_style = bg_panel.get_theme_stylebox("panel")
+			if cell_style is StyleBoxFlat:
+				tween.tween_property(cell_style, "bg_color", cell_color, 0.6)
+
+		# Update hover color (instant, not animated, since it's only visible on hover)
+		if cell.has_method("set_hover_color"):
+			cell.set_hover_color(hover_color)
+
 
 # ============================================================================
 # TIMELINE & STATE MANAGEMENT
